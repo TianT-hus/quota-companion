@@ -1,0 +1,41 @@
+{
+  "name": "quota-companion",
+  "version": "0.1.12",
+  "description": "A local, read-only Codex quota monitor with a native macOS companion.",
+  "author": {
+    "name": "Quota Companion Contributors"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "quota",
+    "macos",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "额度水滴 Dev",
+    "shortDescription": "查看 Codex 主额度并控制本地桌宠",
+    "longDescription": "在对话中读取当前主 Codex 额度、显示液位卡片，并控制完全本地运行的 macOS 额度桌宠。不会读取或保存账户身份与令牌。",
+    "developerName": "Quota Companion Contributors",
+    "category": "Productivity",
+    "capabilities": [
+      "Read-only quota status",
+      "Local desktop control"
+    ],
+    "defaultPrompt": [
+      "查看我当前的 Codex 主额度",
+      "展开额度水滴桌宠",
+      "打开额度水滴设置"
+    ],
+    "brandColor": "#2F88FF",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "websiteURL": "https://github.com/TianT-hus/quota-companion",
+    "privacyPolicyURL": "https://github.com/TianT-hus/quota-companion/blob/main/docs/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/TianT-hus/quota-companion/blob/main/LICENSE"
+  },
+  "homepage": "https://github.com/TianT-hus/quota-companion",
+  "repository": "https://github.com/TianT-hus/quota-companion"
+}

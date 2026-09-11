@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { color-scheme: light dark; --glass:#63d8ff; --depth:#2f88ff; --foam:#eafbff; --ink:#10233c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 4px; font: 13px ui-rounded, system-ui, sans-serif; color: var(--ink); }
+    .card { display:flex; gap:16px; align-items:center; padding:16px; min-height:118px; border:1px solid #fff9; border-radius:24px; background:linear-gradient(145deg,#eafbfff2,#63d8ff36); }
+    .orb { position:relative; flex:0 0 78px; height:78px; overflow:hidden; border-radius:50%; border:1px solid #fff; background:#eafbff; box-shadow:0 12px 26px #2f88ff2d; display:grid; place-items:center; }
+    .liquid { position:absolute; inset:auto 0 0; height:var(--level,0%); background:linear-gradient(#63d8ff,#2f88ff); transition:height .45s cubic-bezier(.2,.8,.2,1); }
+    .value { z-index:1; font:700 16px ui-monospace,SFMono-Regular,monospace; text-shadow:0 1px #fff; }
+    .copy { min-width:0; flex:1; }
+    .title { margin:0 0 8px; font-size:15px; font-weight:750; }
+    .row { display:flex; justify-content:space-between; gap:12px; margin:5px 0; }
+    .pct { font-family:ui-monospace,SFMono-Regular,monospace; font-weight:700; }
+    .meta { margin-top:8px; opacity:.55; font-size:11px; }
+    @media (prefers-color-scheme:dark){ body{color:#eafbff}.card{background:linear-gradient(145deg,#10233cf2,#2f88ff38);border-color:#63d8ff44}.orb{background:#10233c}.value{text-shadow:none} }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="orb"><div class="liquid" id="liquid"></div><div class="value" id="value">—</div></div>
+    <section class="copy"><h1 class="title">主 Codex 额度</h1><div id="rows">正在读取…</div><div class="meta" id="meta"></div></section>
+  </main>
+  <script>
+    const color = p => p <= 5 ? '#ff5e57' : p <= 15 ? '#ff8a3d' : p <= 30 ? '#ffb648' : '#2f88ff';
+    function render(data) {
+      if (!data) return;
+      const tight = data.limitingWindow;
+      const p = tight ? Math.round(tight.remainingPercent) : 0;
+      document.getElementById('value').textContent = tight ? p + '%' : '—';
+      const liquid = document.getElementById('liquid'); liquid.style.setProperty('--level', p + '%'); liquid.style.background = color(p);
+      document.getElementById('rows').innerHTML = (data.windows || []).map(w => `<div class="row"><span>${w.label}</span><span class="pct">${Math.round(w.remainingPercent)}%</span></div>`).join('') || '当前不可用';
+      document.getElementById('meta').textContent = data.status === 'live' ? '实时数据' : data.status === 'stale' ? '缓存数据 · 非实时' : '不可用';
+    }
+    render(window.openai && window.openai.toolOutput);
+    window.addEventListener('openai:set_globals', event => render(event.detail?.globals?.toolOutput));
+  </script>
+</body>
+</html>

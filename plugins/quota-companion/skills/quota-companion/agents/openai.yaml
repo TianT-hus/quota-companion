@@ -1,0 +1,10 @@
+interface:
+  display_name: "额度水滴"
+  short_description: "查看 Codex 主额度并控制本地桌宠"
+  icon_small: "./assets/logo.png"
+  icon_large: "./assets/logo.png"
+  brand_color: "#2F88FF"
+  default_prompt: "Use $quota-companion to show my current main Codex quota status."
+
+policy:
+  allow_implicit_invocation: true

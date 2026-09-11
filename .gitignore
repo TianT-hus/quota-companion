@@ -1,0 +1,8 @@
+.build/
+.build-universal/
+dist/
+work/
+.DS_Store
+._*
+*.log
+plugins/quota-companion/bin/

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "quota-companion": {
+      "command": "./bin/quota-companion-mcp",
+      "args": [],
+      "cwd": "."
+    }
+  }
+}
