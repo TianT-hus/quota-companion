@@ -2,7 +2,7 @@ import Foundation
 
 public enum CropGeometry {
     public static func frame(in bounds: CGRect, doubleRow: Bool) -> CGRect {
-        let ratio = 200.0 / (doubleRow ? 80.0 : 56.0)
+        let ratio = 150.0 / 80.0
         let width = max(1, min(bounds.width - 64, (bounds.height - 64) * ratio))
         return CGRect(x: bounds.midX-width/2, y: bounds.midY-width/ratio/2, width: width, height: width/ratio)
     }

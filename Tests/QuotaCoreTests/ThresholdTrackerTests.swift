@@ -39,3 +39,16 @@ import Testing
     var tracker = ThresholdTracker()
     #expect(tracker.events(previous: nil, current: current).isEmpty)
 }
+
+@Test func customZeroOfflineAndRestartThresholds() throws {
+    let reset = Date(timeIntervalSince1970: 900)
+    func snapshot(_ value: Double, _ state: QuotaDataState = .live) -> QuotaSnapshot {
+        QuotaSnapshot(state: state, source: .appServer, observedAt: .now, windows: [QuotaWindow(kind: .primary, usedPercent: 100-value, windowDurationMinutes: 300, resetsAt: reset)])
+    }
+    var tracker = ThresholdTracker()
+    #expect(tracker.events(previous: snapshot(90, .stale), current: snapshot(1), thresholds: [30,10,0]).isEmpty)
+    #expect(tracker.events(previous: snapshot(1), current: snapshot(0), thresholds: [30,10,0,0]).map(\.threshold) == [0])
+    var restored = try JSONDecoder().decode(ThresholdTracker.self, from: JSONEncoder().encode(tracker))
+    #expect(restored.events(previous: snapshot(1), current: snapshot(0), thresholds: [0]).isEmpty)
+    #expect(restored.events(previous: snapshot(20), current: snapshot(4), thresholds: [15,10,5]).map(\.threshold) == [15,10,5])
+}

@@ -1,41 +1,54 @@
-# 额度水滴 Dev
+# 朝夕 / Zhaoxi — Quota Companion
 
-本地 Codex 额度桌宠与 Codex 插件，macOS 14+。仓库标识为 `quota-companion`，显示名和 Bundle ID `dev.quota-companion.mac` 保持不变。MIT 许可；独立项目，非 OpenAI 官方产品。
+macOS 桌面伙伴：查看主 Codex 额度，管理每日安排和待办，并按需使用语音播报。
 
-当前源码版本 **0.1.12，build 15**：以现有 Mac 版 build 14 为基础整理公开发布，保留桌宠、设置与角色导入功能，修正插件版本及发布流程，并增加隔离验证模式。未包含手机端改动。本地 ad-hoc 包仅用于测试，未经 Developer ID 签名或 Apple 公证；不能保证在下载后的普通 Mac 上直接打开。
+当前公开测试版：**0.2.31 · build 47**。需要 **macOS 14 或更新版本**，安装包同时包含 Apple Silicon（arm64）和 Intel（x86_64）。部分系统翻译功能需要 macOS 15 或更新版本及已下载的语言资源。
 
-![内置猫咪示例](docs/images/cat-example.png)
-![原生详情示例](docs/images/details-example.png)
+## 下载与安装
 
-以上为本机原生视图渲染，68% / 47% 为合成示例，离线符号也属于示例状态，不是真实账户额度。
+在 [GitHub Releases](https://github.com/TianT-hus/quota-companion/releases) 下载 `macos-universal.zip`，解压得到 `朝夕.app`，复制到 Applications 后打开。升级前先正常退出旧版，并备份自己的应用和数据；不要同时运行两份应用。
+
+此包使用 **ad-hoc 测试签名，未经 Apple 公证**，不能验证发布者身份，macOS 可能阻止直接打开。请先核对来源和 `SHA256SUMS`，再根据系统显示的“隐私与安全性”提示决定是否打开。项目不提供关闭系统安全检查的安装脚本。
+
+每次发布提供 5 个附件：Mac 应用、Codex 插件、源码 ZIP、`BUILD-INFO.json` 和 `SHA256SUMS`。在同一下载目录运行 `shasum -a 256 -c SHA256SUMS` 可校验另外 4 个文件。
 
 ## 功能
 
-- 桌面猫咪显示主 Codex 桶的剩余额度；仅显示服务器实际返回的窗口。悬停展开，移出收起，支持拖动、边缘吸附和尺寸设置。
-- 菜单栏入口、刷新、重置倒计时、中英文、低额度提醒、可选语音和减少动态效果。
-- 自定义颜色、本地背景裁剪、v1/v2 分层角色包；首次启动默认使用内置猫咪。
-- 离线保留上次快照并标为缓存；恢复后重新读取。支持逐显示器位置和设置保存。
-- 四个 MCP 工具：`get_quota_status`、`show_companion`、`collapse_companion`、`open_companion_settings`。
+- **额度与桌宠**：通过本机官方 `codex app-server` 读取主 Codex 额度，区分实时、缓存和不可用状态。支持内置猫咪、自定义本地角色、外观与背景。
+- **每日安排**：单日时间轴、前后一天导航、今天/回到现在、分类、重复规则、单日例外、冲突检查及待办关联。0.2.31 恢复纯每日视图，移除了日/周切换入口。
+- **待办与提醒事项**：保留本地待办；用户授权后，可选择 Apple 提醒事项列表进行双向同步。
+- **语音**：系统声音、播报模板、中英文设置；可自行配置阿里云百炼或 MiniMax 的受支持接口。声音克隆向导支持本地录音/导入、预览及上传前的授权和费用确认。
+- **启动方式**：登录时启动或跟随 Codex 启停；启用其中一种时会确认切换，系统批准状态会在设置中显示。
 
-## 安装与使用
+这是独立社区项目，不代表 OpenAI、Apple、阿里云或 MiniMax。Codex 额度功能需要用户自行安装并登录官方 Codex；本项目不分发 Codex CLI。
 
-每位用户必须在自己的 Mac 上安装 Codex，并用自己的 ChatGPT 账户登录；本项目不提供或共享登录凭据。额度由官方 App Server 提供，账号或 CLI 不支持该接口时会显示不可用。见 [安装和手动升级](docs/INSTALL.md)。
+## 数据与权限
 
-源码构建需要 Xcode / Swift 6、Python 3 和 Git，无第三方 Swift 包依赖：
+额度快照、日程、待办、角色、背景及配置保存在本机。云语音会把实际播报文本发送给所选服务商；声音克隆会在用户确认后上传音频并可能产生服务费用。服务商 API Key 保存到 macOS 钥匙串，不写入偏好或诊断文件。Apple 提醒事项所用账户可能由系统同步到 iCloud 或其他账户。详见 [隐私说明](docs/PRIVACY.md)。
+
+发布包只包含代码与内置资源，不包含个人角色、照片、真实日程、额度快照、录音、密钥或本地验收截图。
+
+## Codex 插件
+
+`plugin-universal.zip` 内含 `PluginMarketplace` 本地市场目录及通用架构 MCP 辅助程序。按 Codex 当前提供的本地插件安装入口添加该目录，也可在应用设置中使用插件安装入口。
+
+插件提供 `get_quota_status`、`show_companion`、`collapse_companion`、`open_companion_settings` 四个工具；额度读取为只读。插件不提供密钥读取、声音克隆或日程编辑工具。不要把私人 Codex 配置或身份文件放进这个市场目录。
+
+## 从源码构建
+
+需要包含 macOS 26 SDK 的 Xcode 工具链及 Swift 6；此版本使用较新的系统 API，并以 availability 检查兼容较旧的 macOS。没有外部 Swift 包依赖。
 
 ```sh
 ./scripts/validate.sh
-./scripts/package-app.sh debug
+./scripts/package-app.sh release
 ```
 
-测试包含原生窗口和 HEIC 编解码，需要已登录的 macOS 图形会话。打包脚本输出 `dist/额度水滴 Dev.app`，不会自动安装、启动或替换运行版。正式双架构测试包使用 [发布流程](docs/RELEASE.md)，要求干净 Git 提交。
+输出为 `dist/朝夕.app`。构建不会自动安装、启动、替换现有应用，或注册系统启动服务。资源在打包时放入应用；`swift run` 不代替完整的应用打包流程。
 
-## 插件
+维护者可在干净 Git 提交上运行 `python3 scripts/release-local.py`，从提交归档重新测试、构建并生成附件。详细步骤见 [发布流程](docs/RELEASE.md)。
 
-推荐安装随 Mac app 打包的本地插件市场：设置 → 连接与高级 → 安装 Codex 插件，检查命令并确认添加市场，再在 Codex 插件目录安装「额度水滴 Dev」。安装后开启新会话。源码树不提交已编译 helper；不要直接把未构建的源码市场当作可运行插件。见 [插件说明](docs/PLUGIN.md)。
+## 测试范围
 
-## 数据、限制与反馈
+测试包含日程、重复规则、迁移、语音请求与异常处理、启动设置、角色渲染和中英文界面检查。云服务使用模拟客户端；真实 API 计费、真实声音上传、系统权限、VoiceOver、多屏交互、真实注销/重登和 Intel 真机表现需要独立验证。依赖私人角色或额外环境变量的可选测试在公共源码中不执行其素材检查，不应将测试总数视为全部人工验收通过。
 
-应用保存自己的设置、处理后的本地素材和不含账户身份的额度快照。应用没有遥测或上传服务；它启动的官方 Codex CLI 会按自身机制连接 OpenAI、使用本机登录。插件调用的额度结果会返回当前 Codex 会话。详见 [隐私说明](docs/PRIVACY.md)、[安全反馈](SECURITY.md)、[排错与限制](docs/TROUBLESHOOTING.md) 和 [角色包格式](docs/CHARACTER-PACKAGE.md)。
-
-本轮只支持 [GitHub Releases](https://github.com/TianT-hus/quota-companion/releases) 手动更新，没有自动更新器。公开目标及内置素材分发权已确认；当前发行包为 ad-hoc 测试包，Developer ID、公证、Intel 真机和下载首启尚未验收。素材说明见 [第三方与素材记录](THIRD_PARTY_NOTICES.md)。
+[版本说明](docs/RELEASE-0.2.31.md) · [安全反馈](SECURITY.md) · [素材记录](THIRD_PARTY_NOTICES.md) · [MIT License](LICENSE)

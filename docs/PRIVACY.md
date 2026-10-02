@@ -1,13 +1,26 @@
 # 隐私说明 / Privacy
 
-应用在本机启动官方 `codex app-server`，读取主 Codex 桶的额度窗口。应用本身没有遥测、广告、远端数据库或上传接口；官方 CLI 会使用当前用户的本机登录并按其自身机制连接 OpenAI。账户登录由 Codex 管理，应用不提供代登录或账号共享。
+本说明对应朝夕 0.2.31（build 47）。
 
-本地目录 `~/Library/Application Support/QuotaCompanion` 保存额度快照、提醒去重状态、处理后的背景和角色；偏好设置沿用 `dev.quota-companion.mac`。快照包含额度百分比、窗口长度和重置/观察时间，不含令牌、邮箱、账户 ID、原始认证响应或重置券。不要把真实快照、诊断日志或偏好文件附到公开 issue。
+## 本地数据
 
-背景经方向校正、缩采样并重新编码为最长边 2048px 的 PNG；角色包按 v1/v2 校验、重新编码并剥离图片元数据。恢复默认不删除用户原图。旧版宠物图导入功能可能按原文件复制；用户资料目录始终应按私人数据处理。
+应用通过本机官方 `codex app-server` 读取 `limitId = codex` 的额度窗口。持久化的额度快照不包含账户标识、令牌、邮箱、原始认证响应或重置券明细。官方 Codex 自身的网络通信由 Codex 管理。
 
-MCP 读取额度时，结果会进入当前 Codex 会话，并受该会话的数据处理规则约束。它不会把额度变成公开数据。Unix socket 限当前用户读写；同一用户权限下的其他进程可能读取本地数据。公开代码与发布包只包含内置素材和明确的合成示例，不含用户照片、配置或真实额度。
+应用还在本机保存偏好、日程、待办及关联、语音配置、声音条目与操作状态、角色和背景。声音 ID 和克隆操作记录用于恢复未完成的远端操作；它们不包含服务商 API Key。取消本地声音草稿会清理其临时材料；已提交给服务商的音频或声音不会仅因取消本地向导而自动撤回，需按应用的删除流程及服务商政策处理。
 
-卸载 app 不会自动删除用户资料。若需清除，请先退出 app，按上述目录和偏好域自行备份后删除；重新安装或升级不需要清除。
+本地角色和卡片背景不会由应用上传。自选背景重新编码为最长边不超过 2048px 的 PNG，不复制原图的 GPS、拍摄时间或评论等元数据。恢复默认不删除用户原图。
 
-The app has no telemetry or upload backend. It uses the official local Codex CLI, which manages authentication and network access separately. Quota results requested through the plugin are returned to the current Codex conversation. Local settings, processed images and identity-free quota snapshots remain private user data, not release assets.
+## 用户启用的外部功能
+
+- **云语音与 API 测试**：配置阿里云百炼或 MiniMax、同意相关说明并使用云语音后，实际播报文本会发送到所选官方 HTTPS 接口。文本可能包含日程标题、时间、额度或用户自定义文案；API 测试也会向所选服务发起请求。费用及数据处理遵循所选服务商政策。
+- **声音克隆**：只有用户选择录音或导入、确认声音使用授权、上传及费用后，才提交处理后的音频用于远端建声。麦克风权限只在主动录音时请求。预览、查询和删除远端声音也需要请求对应服务商。
+- **密钥**：服务商 API Key 写入 macOS 钥匙串，不写入偏好、声音操作记录或测试快照。使用时可能短暂缓存在内存中；缓存设有时限，并在锁屏、休眠或会话失活时清理。系统可能要求用户批准钥匙串访问。
+- **Apple 提醒事项**：用户授权完整访问并选定列表后，可读取和修改该列表中的事项以实现双向同步。所选列表可能由系统同步到 iCloud 或其他账户；本地待办不会仅因打开应用而自动上传。
+- **系统声音与翻译**：调用 macOS 的声音和翻译功能；准备语言资源时，macOS 可能按需下载资源。未准备翻译资源时不应把跨语言播报当作可用。
+- **跟随 Codex 与登录启动**：用户主动启用后通过系统服务管理启动；跟随辅助程序观察本机应用启动/退出，不读取日程或额度内容。
+
+发布的源码、插件和安装包不包含维护者的个人数据、录音、照片或密钥。不要在公开 issue 或日志中粘贴这些内容，安全问题使用 [私密报告入口](https://github.com/TianT-hus/quota-companion/security/advisories/new)。
+
+## English summary
+
+Zhaoxi stores sanitized quota snapshots, schedules, todos, companion assets and settings locally. Optional cloud speech sends announcement text to the selected provider; confirmed voice cloning uploads processed audio and may incur charges. Provider keys are stored in macOS Keychain, with a short-lived in-memory cache. Authorized Reminders lists can synchronize through their system accounts. Local backgrounds and character assets are not uploaded by the app. Public release packages contain code and built-in assets, not the maintainer's personal data.

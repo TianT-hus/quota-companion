@@ -71,7 +71,7 @@ public actor CodexAppServerClient {
             "clientInfo": [
                 "name": "quota_companion",
                 "title": "Quota Companion",
-                "version": "0.1.12",
+                "version": "0.1.7",
             ],
         ])
         try sendNotification(method: "initialized", params: [:])

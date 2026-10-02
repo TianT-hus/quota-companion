@@ -2,6 +2,17 @@ import Foundation
 import Testing
 @testable import QuotaCore
 
+@Test func absoluteResetDatesRespectZoneYearAndLanguage() throws {
+    let date = try #require(ISO8601DateFormatter().date(from: "2026-12-31T16:43:00Z"))
+    let window = QuotaWindow(kind: .secondary, usedPercent: 21, windowDurationMinutes: 10080, resetsAt: date)
+    let shanghai = try #require(TimeZone(identifier: "Asia/Shanghai"))
+    let utc = try #require(TimeZone(secondsFromGMT: 0))
+    #expect(window.resetTimestampText(locale: Locale(identifier: "zh-Hans"), timeZone: shanghai) == "01/01 00:43 重置")
+    #expect(window.resetTimestampText(locale: Locale(identifier: "en"), timeZone: utc) == "Resets 12/31 16:43")
+    #expect(window.resetTimestampText(locale: Locale(identifier: "zh-Hans"), timeZone: shanghai, full: true).contains("2027/01/01 00:43"))
+    #expect(window.resetTimestampText(locale: Locale(identifier: "en"), timeZone: utc, full: true).contains("GMT"))
+}
+
 @Test func compactQuotaLabelsAndResetTimes() {
     let now = Date(timeIntervalSince1970: 100)
     let week = QuotaWindow(kind: .secondary, usedPercent: 21, windowDurationMinutes: 10080, resetsAt: now.addingTimeInterval(6 * 86400 + 12 * 3600))

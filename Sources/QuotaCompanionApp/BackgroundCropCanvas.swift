@@ -36,13 +36,16 @@ final class CropCanvas: NSView {
         NSColor(srgbRed: 0.08, green: 0.12, blue: 0.18, alpha: 1).setFill(); bounds.fill()
         guard let image else { return }
         let crop = cropFrame
-        NSColor(srgbRed: 0.86, green: 0.94, blue: 0.98, alpha: 1).setFill(); crop.fill()
+        let radius = crop.width * CompactHoverMetrics.cornerRadius / CompactHoverMetrics.size.width
+        let outline = NSBezierPath(cgPath: RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: crop).cgPath)
+        NSColor(srgbRed: 0.86, green: 0.94, blue: 0.98, alpha: 1).setFill(); outline.fill()
         let rect = composition.imageRect(image: image.size, viewport: crop.size).offsetBy(dx: crop.minX, dy: crop.minY)
         image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
-        let dim = NSBezierPath(rect: bounds); dim.appendRect(crop); dim.windingRule = .evenOdd
+        let dim = NSBezierPath(rect: bounds); dim.append(outline); dim.windingRule = .evenOdd
         NSColor.black.withAlphaComponent(0.58).setFill(); dim.fill()
-        NSColor.white.setStroke(); let border = NSBezierPath(rect: crop); border.lineWidth = 1.5; border.stroke()
+        NSColor.white.setStroke(); outline.lineWidth = 1.5; outline.stroke()
         if dragStart != nil || window?.firstResponder === self {
+            NSGraphicsContext.saveGraphicsState(); outline.addClip()
             let grid = NSBezierPath()
             for n in 1...2 {
                 let t = CGFloat(n)/3
@@ -50,6 +53,7 @@ final class CropCanvas: NSView {
                 grid.move(to: CGPoint(x: crop.minX, y: crop.minY+crop.height*t)); grid.line(to: CGPoint(x: crop.maxX, y: crop.minY+crop.height*t))
             }
             NSColor.white.withAlphaComponent(0.6).setStroke(); grid.lineWidth = 0.5; grid.stroke()
+            NSGraphicsContext.restoreGraphicsState()
         }
     }
     override func becomeFirstResponder() -> Bool { needsDisplay = true; return true }

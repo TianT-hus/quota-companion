@@ -7,6 +7,7 @@ struct SelectedCharacterView: View {
     var body: some View {
         Group {
             if let character = library.selected { ImportedCharacterView(character: character, model: model, renderScale: model.companionSize.scale) }
+            else if !library.playbackMotions(for: nil).isEmpty, let builtin = library.builtinCharacter { ImportedCharacterView(character: builtin, model: model, renderScale: model.companionSize.scale) }
             else { PixelCatView(snapshot: model.snapshot, locale: model.copy.locale, palette: model.palette, textStyle: model.chestTextStyle, customTint: model.quotaTint, customText: model.customAppearance.chest).scaleEffect(model.companionSize.scale, anchor: .topLeading) }
         }
     }
@@ -31,10 +32,21 @@ struct ImportedCharacterView: View {
         let label=manifest.label
         let textures = character.textures(tint, pixelScale: renderScale*displayScale)
         ZStack(alignment: .topLeading) {
+            if !model.characterLibrary.playbackMotions(for: character.id == "builtin" ? nil : character.id).isEmpty {
+                AnimatedCharacterView(character: character, tint: tint, remaining: remaining,
+                    pixelScale: renderScale*displayScale, frequency: model.characterLibrary.animationInterval.continuous ? .continuous : .custom,
+                    customInterval: Double(model.characterLibrary.animationInterval.seconds),
+                    eligible: model.characterLibrary.animationEnabled && model.isCompanionVisible && !model.isExpanded &&
+                        !model.interaction.insidePet && !model.interaction.insideRegion && !model.interaction.dragging &&
+                        model.interaction.holds == 0 && !model.managementPausesAnimation && model.secretary.editor == nil,
+                    motions: model.characterLibrary.playbackMotions(for: character.id == "builtin" ? nil : character.id))
+                    .frame(width: 72*renderScale, height: 80*renderScale)
+            } else {
             sprite(textures.base)
             sprite(textures.fill).mask(sprite(textures.mask))
                 .mask(alignment: .topLeading) { Rectangle().frame(width: 72*renderScale, height: height*renderScale).offset(y: (Double(manifest.fillBottom)-height)*renderScale) }
             sprite(textures.details)
+            }
             ZStack {
                 ForEach(0..<8) { i in quotaLabel.foregroundStyle(outline.color).offset(x: cos(Double(i)*Double.pi/4)*renderScale, y: sin(Double(i)*Double.pi/4)*renderScale) }
                 quotaLabel.foregroundStyle(text.color)
@@ -44,7 +56,7 @@ struct ImportedCharacterView: View {
             }
         }.frame(width: 72*renderScale, height: 80*renderScale).saturation(model.snapshot.state == .live ? 1 : 0.25)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(character.manifest.name + ", " + (remaining == nil ? model.copy.text("暂无额度", "Quota unavailable") : model.snapshot.petLabelWindows.map { "\($0.compactLabel(locale: model.copy.locale)) \(Int($0.remainingPercent.rounded()))%" }.joined(separator: ", ")) + ", " + model.snapshot.state.rawValue)
+            .accessibilityLabel(model.characterLibrary.displayName(for: character.id, copy: model.copy) + ", " + (remaining == nil ? model.copy.text("暂无额度", "Quota unavailable") : model.snapshot.petLabelWindows.map { "\($0.compactLabel(locale: model.copy.locale)) \(Int($0.remainingPercent.rounded()))%" }.joined(separator: ", ")) + ", " + model.snapshot.state.rawValue)
     }
     private var text: QuotaCore.RGBColor { model.customAppearance.chest.flatMap { QuotaCore.RGBColor(hexString: $0.text) } ?? model.chestTextStyle.text }
     private var outline: QuotaCore.RGBColor { model.customAppearance.chest.flatMap { QuotaCore.RGBColor(hexString: $0.outline) } ?? model.chestTextStyle.outline }

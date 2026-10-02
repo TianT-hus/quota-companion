@@ -37,7 +37,7 @@ struct CropCharacterTests {
         let original=BackgroundComposition(x: 0.5, y: 0.5, zoom: 2, opacity: 0.42)
         for doubleRow in [true,false] {
             let crop=CropGeometry.frame(in: CGRect(x: 0, y: 0, width: 520, height: 280), doubleRow: doubleRow)
-            #expect(abs(crop.width/crop.height - 200/(doubleRow ? 80.0 : 56.0)) < 0.001)
+            #expect(abs(crop.width/crop.height - 150.0/80.0) < 0.001)
             for delta in [CGSize(width: 9999,height: -9999), CGSize(width: -9999,height: 9999)] {
                 let next=CropGeometry.moved(original, image: CGSize(width: 1000, height: 500), viewport: crop.size, delta: delta)
                 let rect=next.imageRect(image: CGSize(width: 1000, height: 500), viewport: crop.size)

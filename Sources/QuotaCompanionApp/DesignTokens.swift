@@ -55,11 +55,11 @@ enum CompanionTokens {
     }
 
     static func rounded(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .rounded)
+        .system(size: size, weight: weight, design: .default)
     }
 
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        .system(size: size, weight: weight, design: .default).monospacedDigit()
     }
 }
 

@@ -4,7 +4,7 @@ public struct SnapshotStore: Sendable {
     public let directory: URL
 
     public init(directory: URL? = nil) {
-        if let directory = directory ?? IsolatedRuntime.directory {
+        if let directory {
             self.directory = directory
         } else {
             let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!

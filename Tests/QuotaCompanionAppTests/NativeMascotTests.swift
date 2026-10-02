@@ -46,7 +46,7 @@ struct NativeMascotTests {
         for _ in 0..<100 {
             model.showExpanded()
             #expect(controller.nativeWindow.frame == original)
-            #expect(controller.detailWindow.frame.size == GlassDetailMetrics(windowCount: 1).size)
+            #expect(controller.detailWindow.frame.size == CGSize(width: 300, height: 160))
             #expect(controller.detailWindow.contentView?.bounds.size == controller.detailWindow.frame.size)
             #expect(controller.layoutMilliseconds < 300)
             #expect(controller.detailWindow.isVisible)
@@ -60,7 +60,7 @@ struct NativeMascotTests {
         #expect(controller.nativeWindow.contentView?.bounds.size == PetPanelLayout.petSize)
         model.showExpanded(); model.snapshot = .demo()
         try await Task.sleep(for: .milliseconds(320))
-        #expect(controller.detailWindow.frame.size == PetPanelLayout.detailSize)
+        #expect(controller.detailWindow.frame.size == CGSize(width: 300, height: 160))
         #expect(controller.nativeWindow.frame == original)
         model.collapse(); model.showExpanded()
         controller.nativeWindow.contentView?.frame.size = CGSize(width: 50, height: 50)

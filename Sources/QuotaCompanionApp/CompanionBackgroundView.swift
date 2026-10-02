@@ -7,6 +7,55 @@ struct CompanionBackground {
     let appearances: BackgroundAppearances
 }
 
+/// A separate surface so the compact hover redesign does not restyle the
+/// schedule editor, full-day panel, or saved background preferences.
+struct CompactHoverSurface: View {
+    let background: CompanionBackground?
+    let appearance: BackgroundAppearance
+    let solid: Bool
+    var composition: BackgroundComposition?
+    var renderScale: CGFloat = 1
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: CompactHoverMetrics.cornerRadius * renderScale, style: .continuous) }
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                if !solid { Rectangle().fill(.ultraThinMaterial) }
+                LinearGradient(colors: [Color(hex: 0xEFFAFF).opacity(solid ? 1 : 0.94),
+                                        Color(hex: 0xD7EDFC).opacity(solid ? 1 : 0.88)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                if let background {
+                    if let composition {
+                        PositionedBackgroundImage(image: background.image, composition: composition)
+                            .opacity(composition.safeOpacity)
+                        Color.white.opacity(BackgroundReadability.protection(opacity: composition.safeOpacity, solid: solid,
+                            darkestPixel: composition.darkestPixelHex.flatMap(QuotaCore.RGBColor.init(hexString:))))
+                    } else {
+                        Image(nsImage: background.image).resizable().scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                            .opacity(solid ? 0.04 : min(0.12, appearance.imageOpacity))
+                        Color.white.opacity(appearance.protectionOpacity)
+                    }
+                }
+                LinearGradient(colors: [.white.opacity(0.32), .clear, .white.opacity(0.08)],
+                               startPoint: .top, endPoint: .bottom)
+                shape.strokeBorder(.white.opacity(0.95), lineWidth: 0.75 * renderScale)
+                if solid { shape.inset(by: 0.75 * renderScale).strokeBorder(Color(hex: 0x627D94), lineWidth: 0.5 * renderScale) }
+            }.clipShape(shape)
+        }.allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+struct CompactHoverControlSurface: View {
+    var highContrast = false
+    var renderScale: CGFloat = 1
+    var body: some View {
+        Circle().fill(LinearGradient(colors: [Color(hex: 0xF5FCFF), Color(hex: 0xD8EEFC)],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay(Circle().strokeBorder(highContrast ? Color(hex: 0x45637A) : .white.opacity(0.95), lineWidth: 0.75 * renderScale))
+            .allowsHitTesting(false)
+    }
+}
+
 /// Deliberately light glass: desktop appearance must not darken the reading surface.
 struct GlassCardSurface: View {
     let background: CompanionBackground?

@@ -74,8 +74,22 @@ public struct CustomAppearance: Codable, Equatable, Sendable {
     public var progressHex = "#72D5E8"
     public var progressPresetID: UUID?
     public var chest: TextPreset?
+    public var chestPresetID: UUID?
     public var background: BackgroundComposition?
     public init() {}
+    public mutating func migratePaletteLibrary(legacy: CompanionPalette) {
+        guard version < 2 else { return }
+        let seeds = CompanionPalette.allCases.enumerated().map { index, palette in
+            ColorPreset(id: UUID(uuidString: "02190000-0000-0000-0000-00000000000\(index)")!, name: palette.title(chinese: true), hex: palette.color.hexString)
+        }
+        colors.insert(contentsOf: seeds, at: 0)
+        if quotaHex == nil {
+            let selected = seeds[CompanionPalette.allCases.firstIndex(of: legacy)!]
+            quotaHex = selected.hex; quotaPresetID = selected.id
+        }
+        if progressPresetID == nil, let seed = seeds.first(where: { $0.hex == progressHex }) { progressPresetID = seed.id }
+        version = 2
+    }
     public mutating func save(_ preset: ColorPreset) {
         if let i = colors.firstIndex(where: { $0.id == preset.id }) { colors[i] = preset } else { colors.append(preset) }
         if quotaPresetID == preset.id { quotaHex = preset.hex }
@@ -88,9 +102,26 @@ public struct CustomAppearance: Codable, Equatable, Sendable {
     }
     public mutating func save(_ preset: TextPreset) {
         if let i = textPresets.firstIndex(where: { $0.id == preset.id }) { textPresets[i] = preset } else { textPresets.append(preset) }
-        if chest?.id == preset.id { chest = preset }
+        if chestPresetID == preset.id || (version < 3 && chest?.id == preset.id) { chest = preset }
     }
-    public mutating func removeText(_ id: UUID) { textPresets.removeAll { $0.id == id } }
+    public mutating func selectText(_ preset: TextPreset) { chest = preset; chestPresetID = preset.id }
+    public mutating func removeText(_ id: UUID) {
+        textPresets.removeAll { $0.id == id }
+        if chestPresetID == id { chestPresetID = nil }
+    }
+    public mutating func migrateTextLibrary(legacy: ChestTextStyle) {
+        guard version < 3 else { return }
+        let seeds = ChestTextStyle.allCases.enumerated().map { index, style in
+            TextPreset(id: UUID(uuidString: "02200000-0000-0000-0000-00000000000\(index)")!, name: style.title(chinese: true), text: style.text.hexString, outline: style.outline.hexString)
+        }
+        if let current = chest {
+            chestPresetID = textPresets.contains { $0.id == current.id } ? current.id : nil
+        } else {
+            selectText(seeds[ChestTextStyle.allCases.firstIndex(of: legacy)!])
+        }
+        textPresets.insert(contentsOf: seeds, at: 0)
+        version = 3
+    }
 }
 
 public enum BackgroundReadability {

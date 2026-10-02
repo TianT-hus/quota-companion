@@ -9,9 +9,11 @@ let package = Package(
         .library(name: "QuotaCore", targets: ["QuotaCore"]),
         .executable(name: "额度水滴-Dev", targets: ["QuotaCompanionApp"]),
         .executable(name: "quota-companion-mcp", targets: ["QuotaCompanionMCP"]),
+        .executable(name: "quota-companion-follow", targets: ["QuotaCompanionFollow"]),
     ],
     targets: [
         .target(name: "QuotaCore"),
+        .executableTarget(name: "QuotaCompanionFollow", dependencies: ["QuotaCore"]),
         .executableTarget(
             name: "QuotaCompanionApp",
             dependencies: ["QuotaCore"],

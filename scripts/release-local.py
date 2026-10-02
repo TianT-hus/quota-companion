@@ -20,11 +20,11 @@ identity=os.environ.get('DEVELOPER_ID_APPLICATION','-')
 status='adhoc-test' if identity=='-' else 'developer-id-unnotarized'
 name=f'quota-companion-{version}-build{build}-{status}'
 out=root/'dist'/(name+'-'+commit[:12]);out.mkdir(parents=True,exist_ok=False)
-app=checkout/'dist/额度水滴 Dev.app'
+app=checkout/'dist/朝夕.app'
 run('ditto','--norsrc',str(app),str(out/app.name))
 app=out/app.name
 helper=app/'Contents/Resources/PluginMarketplace/plugins/quota-companion/bin/quota-companion-mcp'
-for binary in [app/'Contents/MacOS/额度水滴-Dev',helper]:
+for binary in [app/'Contents/MacOS/额度水滴-Dev',app/'Contents/MacOS/quota-companion-follow',helper]:
  run('lipo',str(binary),'-verify_arch','arm64','x86_64')
  strings=capture('strings','-a',str(binary))
  # Published machine code must not reveal the builder's personal source paths.
@@ -33,7 +33,8 @@ run('codesign','--verify','--deep','--strict',str(app))
 run('ditto','--norsrc','-c','-k','--keepParent',str(app),str(out/(name+'-macos-universal.zip')))
 run('ditto','--norsrc','-c','-k','--keepParent',str(app/'Contents/Resources/PluginMarketplace'),str(out/(name+'-plugin-universal.zip')))
 run('git','-C',str(root),'archive','--format=zip','--prefix=quota-companion/','-o',str(out/(name+'-source.zip')),commit)
-record={'commit':commit,'version':version,'build':build,'architectures':['arm64','x86_64'],'signing':status,'notarized':False,'clean_commit_build':True,'swift':capture('swift','--version'),'xcode':capture('xcodebuild','-version')}
+record={'commit':commit,'tree':capture('git','-C',str(root),'rev-parse','HEAD^{tree}'),'version':version,'build':build,'architectures':['arm64','x86_64'],'signing':status,'notarized':False,'clean_commit_build':True,'swift':capture('swift','--version'),'xcode':capture('xcodebuild','-version')}
+if os.environ.get('PUBLIC_SOURCE_COMMIT'): record['public_source_commit']=os.environ['PUBLIC_SOURCE_COMMIT']
 (out/'BUILD-INFO.json').write_text(json.dumps(record,indent=2)+'\n')
 files=sorted([*out.glob('*.zip'),out/'BUILD-INFO.json'])
 (out/'SHA256SUMS').write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in files))

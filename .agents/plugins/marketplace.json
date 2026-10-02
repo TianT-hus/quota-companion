@@ -1,7 +1,7 @@
 {
   "name": "quota-companion-dev",
   "interface": {
-    "displayName": "额度水滴开发市场"
+    "displayName": "朝夕本地插件市场"
   },
   "plugins": [
     {

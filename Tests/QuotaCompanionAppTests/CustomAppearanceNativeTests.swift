@@ -13,7 +13,8 @@ struct CustomAppearanceNativeTests {
         d.set("mint", forKey: "companionPalette"); d.set("old.png", forKey: "customMascotPath")
         let store = SnapshotStore(directory: FileManager.default.temporaryDirectory.appendingPathComponent(suite))
         let m = CompanionModel(defaults: d, store: store)
-        #expect(m.palette == .mint && m.quotaTint == nil && m.customAppearance.progressFollowsQuota)
+        #expect(m.palette == .mint && m.quotaTint == CompanionPalette.mint.color && m.customAppearance.progressFollowsQuota)
+        #expect(m.customAppearance.colors.contains { $0.id == m.customAppearance.quotaPresetID && $0.hex == CompanionPalette.mint.color.hexString })
         let snapshot = m.snapshot
         m.customAppearance.quotaHex = "#ED869D"
         m.customAppearance.progressFollowsQuota = false; m.customAppearance.progressHex = "#AA88EE"

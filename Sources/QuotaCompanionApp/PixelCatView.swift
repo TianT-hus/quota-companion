@@ -95,6 +95,9 @@ struct PetRootView: View {
             .contentShape(PixelCatShape())
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { model.showKeyboardDetails() }
-            .help(model.copy.text("悬停查看额度；离开自动收起；拖动移动", "Hover for quota; leave to hide; drag to move"))
+            .accessibilityAction(named: Text(model.copy.text("今日安排", "Today's schedule"))) { model.showDay() }
+            .accessibilityAction(named: Text(model.copy.text("刷新额度", "Refresh quota"))) { if !model.isConnecting { model.refreshNow() } }
+            .accessibilityAction(named: Text(model.copy.text("设置", "Settings"))) { model.openSettings() }
+            .help(model.copy.text("悬停查看；右键打开今日安排、刷新和设置；拖动移动", "Hover for details; right-click for schedule, refresh and settings; drag to move"))
     }
 }

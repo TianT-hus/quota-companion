@@ -20,7 +20,7 @@ enum QuotaCompanionMCP {
             return success(id: id, result: [
                 "protocolVersion": "2025-06-18",
                 "capabilities": ["tools": ["listChanged": false], "resources": ["subscribe": false, "listChanged": false]],
-                "serverInfo": ["name": "quota-companion", "version": "0.1.12"],
+            "serverInfo": ["name": "quota-companion", "version": "0.2.6"],
             ])
         case "notifications/initialized":
             return nil
@@ -162,7 +162,7 @@ enum QuotaCompanionMCP {
     }
 
     private static func readableSnapshot(_ snapshot: QuotaSnapshot) -> String {
-        guard !snapshot.windows.isEmpty else { return "当前无法读取主 Codex 额度。请先在本机 Codex 登录，并检查 CLI 路径和网络后重试。" }
+        guard !snapshot.windows.isEmpty else { return "当前无法读取主 Codex 额度。应用和 App Server 均不可用。" }
         let state = snapshot.state == .live ? "实时" : "缓存（非实时）"
         let rows = snapshot.windows.map { window in
             "- \(window.accessibleLabel(locale: Locale(identifier: "zh-Hans")))：剩余 \(Int(window.remainingPercent.rounded()))%，重置时间 \(window.resetsAt.formatted(.iso8601))"
@@ -177,7 +177,6 @@ enum QuotaCompanionMCP {
            object["ok"] as? Bool == true {
             return ["content": [["type": "text", "text": message]]]
         }
-        guard !IsolatedRuntime.enabled else { return toolError("Isolated QA app is not running; LaunchServices fallback is disabled.") }
         guard let url = URL(string: "quota-companion://\(host)"), NSWorkspace.shared.open(url) else {
             guard launchInstalledApp(command: host) else {
                 return toolError("未找到额度水滴应用。请先安装并启动 macOS 应用。")
@@ -191,6 +190,8 @@ enum QuotaCompanionMCP {
         let homeApplications = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications/额度水滴 Dev.app")
         let candidates = [
             NSWorkspace.shared.urlForApplication(withBundleIdentifier: "dev.quota-companion.mac"),
+            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications/朝夕.app"),
+            URL(fileURLWithPath: "/Applications/朝夕.app"),
             URL(fileURLWithPath: "/Applications/额度水滴 Dev.app"),
             homeApplications,
         ].compactMap { $0 }

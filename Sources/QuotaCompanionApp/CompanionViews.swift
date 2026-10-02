@@ -4,110 +4,104 @@ import SwiftUI
 struct CompanionRootView: View {
     @ObservedObject var model: CompanionModel
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.displayScale) private var displayScale
     var accessibility = CompanionAccessibility()
+    var previewDate: Date? = nil
+    var sampleQuotaCount: Int? = nil
+    var sampleScale: CGFloat = 1
+    var previewBackground: CompanionBackground? = nil
+    var previewComposition: BackgroundComposition? = nil
+    private var renderedBackground: CompanionBackground? { previewBackground ?? model.background }
+    private var scale: CGFloat { max(2, sampleQuotaCount == nil ? model.companionSize.scale : sampleScale) }
+    private var isSample: Bool { sampleQuotaCount != nil }
+    private var windows: [QuotaWindow] {
+        guard let count = sampleQuotaCount else { return model.snapshot.windows }
+        let reset = Date(timeIntervalSince1970: 1790606580)
+        let week = QuotaWindow(kind: .secondary, usedPercent: 21, windowDurationMinutes: 10080, resetsAt: reset)
+        return count == 1 ? [week] : [QuotaWindow(kind: .primary, usedPercent: 32, windowDurationMinutes: 300, resetsAt: reset), week]
+    }
+    private var sampleSchedule: ScheduleBlock? { isSample ? ScheduleBlock(start: 13*60, end: 14*60, title: model.copy.text("示例：阅读与休息", "Sample: reading & rest")) : nil }
+    private var offline: Bool { !isSample && model.snapshot.state != .live }
+    private func pt(_ value: CGFloat) -> CGFloat { (value * scale * displayScale).rounded() / displayScale }
     private var appearance: BackgroundAppearance {
-        (model.background?.appearances ?? .standard)[BackgroundAppearanceKey(
+        (renderedBackground?.appearances ?? .standard)[BackgroundAppearanceKey(
             dark: false, highContrast: accessibility.contrast == .increased,
             reduceTransparency: accessibility.reduceTransparency)]
     }
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                if model.isCompanionVisible && model.isExpanded {
-                    TimelineView(.periodic(from: .now, by: 1)) { context in fitted(now: context.date, available: geometry.size) }
+                if let previewDate { fitted(now: previewDate, available: geometry.size) }
+                else if model.isCompanionVisible && model.isExpanded {
+                    TimelineView(.periodic(from: .now, by: 60)) { _ in fitted(now: .now, available: geometry.size) }
                 } else { fitted(now: .now, available: geometry.size) }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
     }
     private func fitted(now: Date, available: CGSize) -> some View {
-        let scale = model.companionSize.scale
-        let base = GlassDetailMetrics(windowCount: model.snapshot.windows.count).size
-        let content = content(now: now).frame(width: base.width, height: base.height)
-            .scaleEffect(scale, anchor: .topLeading)
-            .frame(width: base.width * scale, height: base.height * scale, alignment: .topLeading)
+        let base = isSample ? CompactHoverMetrics.size : model.detailBaseSize
+        let content = card(now: now).foregroundStyle(appearance.text.color)
         return Group {
             if available.width < base.width * scale || available.height < base.height * scale {
                 ScrollView([.horizontal, .vertical]) { content }
             } else { content }
         }
     }
-    private func content(now: Date) -> some View {
-        HStack(spacing: 8) {
-            if model.detailDirection == .left { controls(now: now) }
-            card(now: now)
-            if model.detailDirection != .left { controls(now: now) }
-        }.foregroundStyle(appearance.text.color)
-    }
     private func card(now: Date) -> some View {
-        ZStack {
-            GlassCardSurface(background: model.background, appearance: appearance,
-                             solid: accessibility.reduceTransparency || accessibility.contrast == .increased, composition: model.customAppearance.background)
-            Group {
-                if model.snapshot.state == .unavailable || model.snapshot.windows.isEmpty {
+        let overlap = !isSample && (model.detailDirection == .left || model.detailDirection == .right)
+        let contentWidth = pt(CompactHoverMetrics.size.width) - pt(CompactHoverMetrics.edgeInset) - pt(overlap ? CompactHoverMetrics.overlapInset : CompactHoverMetrics.edgeInset)
+        let current = isSample ? sampleSchedule : model.secretary.data.current(at: now)
+        let size = HoverTypography.size(quota: windows.map {
+            ("\($0.compactLabel(locale: model.copy.locale)) \(Int($0.remainingPercent.rounded()))%", $0.resetTimestampText(locale: model.copy.locale))
+        }, schedule: [current?.timeLabel ?? "", current?.title ?? model.copy.text("今日安排已结束", "Schedule finished")], contentWidth: contentWidth, scale: scale, offline: offline)
+        return ZStack {
+            CompactHoverSurface(background: renderedBackground, appearance: appearance,
+                             solid: accessibility.reduceTransparency || accessibility.contrast == .increased, composition: previewComposition ?? model.customAppearance.background, renderScale: scale)
+              VStack(spacing: pt(2)) {
+              Group {
+                if (!isSample && model.snapshot.state == .unavailable) || windows.isEmpty {
                     Text(model.copy.text("暂无额度", "No quota data"))
-                        .font(CompanionTokens.rounded(10, weight: .medium))
+                        .font(Font(HoverTypography.font(size)))
+                        .lineLimit(1)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if model.snapshot.windows.count > 2 {
-                    ScrollView { rows(now: now) }.scrollIndicators(.hidden)
-                } else { rows(now: now).frame(maxHeight: .infinity) }
-            }.padding(.leading, model.detailDirection == .right ? 42 : 10)
-                .padding(.trailing, model.detailDirection == .left ? 42 : 10)
-                .padding(.vertical, 6)
-        }.frame(width: 200, height: GlassDetailMetrics(windowCount: model.snapshot.windows.count).cardHeight)
+                } else if windows.count > 2 {
+                    ScrollView { rows(size: size) }.scrollIndicators(.hidden)
+                } else { rows(size: size).frame(maxHeight: .infinity) }
+              }.frame(height: pt(CompactHoverMetrics.quotaHeight)).clipped()
+                  .help(isSample ? model.copy.text("虚构示例额度", "Fictional sample quota") : CompanionContextMenu.statusDescription(model, now: now))
+              Color.clear
+                  .frame(height: pt(1)).accessibilityHidden(true)
+              SecretarySummary(model: model, secretary: model.secretary, now: now, renderScale: scale, sharedTextSize: size, sample: sampleSchedule)
+                  .frame(height: pt(CompactHoverMetrics.scheduleHeight))
+              }.frame(maxWidth: .infinity)
+                .padding(.leading, pt(!isSample && model.detailDirection == .right ? CompactHoverMetrics.overlapInset : CompactHoverMetrics.edgeInset))
+                .padding(.trailing, pt(!isSample && model.detailDirection == .left ? CompactHoverMetrics.overlapInset : CompactHoverMetrics.edgeInset))
+                .padding(.vertical, pt(CompactHoverMetrics.verticalInset))
+        }.frame(width: pt(CompactHoverMetrics.size.width), height: pt(CompactHoverMetrics.size.height))
     }
-    private func controls(now: Date) -> some View {
-            VStack(spacing: 4) {
-                Button(action: model.openSettings) {
-                    Image(systemName: "gearshape.fill").font(.system(size: 16, weight: .bold))
-                        .frame(width: 28, height: 28)
-                        .background(GlassControlSurface())
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain)
-                    .accessibilityLabel(model.copy.text("设置", "Settings"))
-                    .help(model.copy.text("设置", "Settings"))
-            Button(action: model.refreshNow) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: model.isConnecting ? "hourglass" : "arrow.clockwise")
-                        .font(.system(size: 17, weight: .bold)).frame(width: 28, height: 28)
-                        .background(GlassControlSurface())
-                    if model.snapshot.state != .live {
-                        Image(systemName: "wifi.slash").font(.system(size: 7, weight: .bold)).offset(x: 1, y: -5)
-                    }
-                }.contentShape(Rectangle())
-            }.buttonStyle(.plain).disabled(model.isConnecting)
-                .accessibilityLabel(model.copy.text("刷新额度", "Refresh quota"))
-                .accessibilityValue(refreshDescription(now: now)).help(refreshDescription(now: now))
-            }
-    }
-    private func rows(now: Date) -> some View {
-        VStack(spacing: 6) {
-            ForEach(Array(model.snapshot.windows.enumerated()), id: \.offset) { _, window in
-                VStack(spacing: 4) {
-                    HStack(spacing: 2) {
-                        Text("\(window.compactLabel(locale: model.copy.locale)) \(Int(window.remainingPercent.rounded()))%")
-                            .font(CompanionTokens.mono(11, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
-                        Spacer(minLength: 1)
-                        Image(systemName: "clock").font(.system(size: 10, weight: .semibold))
-                        Text(window.shortResetText(now: now, locale: model.copy.locale))
-                            .font(CompanionTokens.mono(10, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                    }
+    private func rows(size: CGFloat) -> some View {
+        VStack(spacing: pt(2)) {
+            ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                VStack(spacing: pt(1)) {
+                    HStack(spacing: pt(1)) {
+                        HoverText(text: "\(window.compactLabel(locale: model.copy.locale)) \(Int(window.remainingPercent.rounded()))%", size: size, weight: .semibold)
+                        if offline {
+                            Image(systemName: "wifi.slash").font(.system(size: pt(7))).accessibilityHidden(true)
+                        }
+                        Spacer(minLength: 0)
+                        HoverText(text: window.resetTimestampText(locale: model.copy.locale), size: HoverTypography.secondarySize(scale: scale))
+                            .help(window.resetTimestampText(locale: model.copy.locale, full: true))
+                    }.frame(height: pt(11))
                     LiquidProgressView(remaining: window.remainingPercent,
-                        active: model.isCompanionVisible && model.isExpanded && model.snapshot.state == .live && !accessibility.reduceMotion,
-                        stale: model.snapshot.state != .live, appearance: appearance, palette: model.palette, customTint: model.progressTint)
-                        .frame(height: 14).accessibilityHidden(true)
+                        active: !isSample && model.isCompanionVisible && model.isExpanded && model.snapshot.state == .live && !accessibility.reduceMotion,
+                        stale: offline, appearance: appearance, palette: model.palette, customTint: model.progressTint,
+                        style: .compact, highContrast: accessibility.contrast == .increased, renderScale: scale)
+                        .frame(height: pt(CompactHoverMetrics.progressHeight)).accessibilityHidden(true)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(window.accessibleLabel(locale: model.copy.locale)), \(Int(window.remainingPercent.rounded()))%, \(model.copy.text("重置倒计时", "Resets in")) \(window.shortResetText(now: now, locale: model.copy.locale))")
+                .accessibilityLabel("\(window.accessibleLabel(locale: model.copy.locale)), \(Int(window.remainingPercent.rounded()))%, \(window.resetTimestampText(locale: model.copy.locale, full: true))")
             }
         }
-    }
-    private func refreshDescription(now: Date) -> String {
-        if model.isConnecting { return model.copy.text("正在刷新", "Refreshing") }
-        if model.snapshot.windows.isEmpty { return model.copy.text("暂无额度，点击重试", "No quota data; retry") }
-        let age = max(0, Int(now.timeIntervalSince(model.snapshot.observedAt)))
-        let prefix = model.snapshot.state == .live ? "" : model.copy.text("已断开；", "Offline; ")
-        let detail = model.snapshot.state == .live ? "" : model.diagnosticMessage
-        return prefix + model.copy.text("\(age) 秒前更新；点击刷新", "Updated \(age)s ago; refresh") + " " + detail
     }
 }

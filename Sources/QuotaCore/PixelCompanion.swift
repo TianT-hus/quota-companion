@@ -77,10 +77,10 @@ public struct PetPanelLayout: Equatable, Sendable {
     public let detail: CGRect
     public let direction: DetailDirection
     public let bridge: CGRect
-    public init(pet: CGRect, windowCount: Int, screen: CGRect, scale: Double = 1) {
+    public init(pet: CGRect, windowCount: Int, screen: CGRect, scale: Double = 1, detailSize: CGSize? = nil) {
         let overlap = 36 * scale, gap = 8 * scale
         self.pet = pet
-        let base = GlassDetailMetrics(windowCount: windowCount).size
+        let base = detailSize ?? GlassDetailMetrics(windowCount: windowCount).size
         let ideal = CGSize(width: base.width * scale, height: base.height * scale)
         let spaces: [(DetailDirection, CGRect)] = [
             (.right, CGRect(x: pet.maxX - overlap, y: screen.minY, width: max(0, screen.maxX - pet.maxX + overlap), height: screen.height)),

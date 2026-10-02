@@ -1,7 +1,7 @@
 {
   "name": "quota-companion",
-  "version": "0.1.12",
-  "description": "A local, read-only Codex quota monitor with a native macOS companion.",
+  "version": "0.2.31",
+  "description": "Read-only Codex quota access and local controls for the Zhaoxi macOS companion.",
   "author": {
     "name": "Quota Companion Contributors"
   },
@@ -15,9 +15,9 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "额度水滴 Dev",
-    "shortDescription": "查看 Codex 主额度并控制本地桌宠",
-    "longDescription": "在对话中读取当前主 Codex 额度、显示液位卡片，并控制完全本地运行的 macOS 额度桌宠。不会读取或保存账户身份与令牌。",
+    "displayName": "朝夕 / Zhaoxi",
+    "shortDescription": "查看 Codex 额度并控制朝夕桌宠",
+    "longDescription": "读取主 Codex 额度，显示液位卡片，并打开朝夕桌宠与设置。应用支持本地日程、待办，以及用户主动启用的提醒事项同步和云语音。",
     "developerName": "Quota Companion Contributors",
     "category": "Productivity",
     "capabilities": [
@@ -26,8 +26,8 @@
     ],
     "defaultPrompt": [
       "查看我当前的 Codex 主额度",
-      "展开额度水滴桌宠",
-      "打开额度水滴设置"
+      "展开朝夕桌宠",
+      "打开朝夕设置"
     ],
     "brandColor": "#2F88FF",
     "composerIcon": "./assets/icon.png",

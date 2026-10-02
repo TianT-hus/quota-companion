@@ -11,7 +11,7 @@ public struct ThresholdTracker: Codable, Sendable {
 
     public init() {}
 
-    public mutating func events(previous: QuotaSnapshot?, current: QuotaSnapshot) -> [ThresholdEvent] {
+    public mutating func events(previous: QuotaSnapshot?, current: QuotaSnapshot, thresholds: [Int] = Self.thresholds) -> [ThresholdEvent] {
         var output: [ThresholdEvent] = []
         for window in current.windows {
             let cycle = cycleKey(window)
@@ -21,8 +21,8 @@ public struct ThresholdTracker: Codable, Sendable {
                 !key.hasPrefix("\(window.kind.rawValue):") || key == cycle
             }
 
-            guard let old, old.resetsAt == window.resetsAt else { continue }
-            for threshold in Self.thresholds where old.remainingPercent > Double(threshold) && window.remainingPercent <= Double(threshold) {
+            guard previous?.state == .live, current.state == .live, let old, old.resetsAt == window.resetsAt else { continue }
+            for threshold in Set(thresholds).sorted(by: >) where (0...100).contains(threshold) && old.remainingPercent > Double(threshold) && window.remainingPercent <= Double(threshold) {
                 if !(notifiedByCycle[cycle] ?? []).contains(threshold) {
                     output.append(ThresholdEvent(window: window, threshold: threshold))
                     notifiedByCycle[cycle, default: []].insert(threshold)

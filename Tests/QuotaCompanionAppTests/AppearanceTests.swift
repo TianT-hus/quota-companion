@@ -61,7 +61,8 @@ struct AppearanceTests {
                         model.snapshot = QuotaSnapshot(state: count == 0 ? .unavailable : (reduced ? .stale : .live),
                                                        source: .cache, observedAt: .now.addingTimeInterval(-95), windows: windows)
                         model.isConnecting = !reduced
-                        let size = GlassDetailMetrics(windowCount: count).size
+                        let scale = max(2, model.companionSize.scale)
+                        let size = CGSize(width: model.detailBaseSize.width * scale, height: model.detailBaseSize.height * scale)
                         let renderer = ImageRenderer(content: CompanionRootView(model: model)
                             .frame(width: size.width, height: size.height)
                             .environment(\.colorScheme, scheme)

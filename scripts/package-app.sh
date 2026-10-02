@@ -17,13 +17,18 @@ else
   swift build --package-path "$repo_root" -c debug --disable-sandbox --cache-path "$repo_root/.build/swiftpm-cache"
   build_bin="$(swift build --package-path "$repo_root" -c debug --show-bin-path)"
 fi
-app="$repo_root/dist/额度水滴 Dev.app"
+app="$repo_root/dist/朝夕.app"
 [[ ! -e "$app" ]] || { print -u2 'Output app already exists. Choose a fresh build checkout.'; exit 2; }
 contents="$app/Contents"
 market="$contents/Resources/PluginMarketplace"
 mkdir -p "$contents/MacOS" "$market/.agents/plugins" "$market/plugins"
 cp "$repo_root/Packaging/Info.plist" "$contents/Info.plist"
 cp "$build_bin/额度水滴-Dev" "$contents/MacOS/额度水滴-Dev"
+cp "$build_bin/quota-companion-follow" "$contents/MacOS/"
+mkdir -p "$contents/Library/LaunchAgents"
+cp "$repo_root/Packaging/dev.quota-companion.follow.plist" "$contents/Library/LaunchAgents/"
+swift "$repo_root/scripts/generate-brand-icon.swift" "$repo_root/.build/Zhaoxi.iconset"
+iconutil -c icns "$repo_root/.build/Zhaoxi.iconset" -o "$contents/Resources/Zhaoxi.icns"
 cp "$repo_root/Sources/QuotaCompanionApp/Resources/"*.png "$contents/Resources/"
 cp "$repo_root/.agents/plugins/marketplace.json" "$market/.agents/plugins/"
 cp -R "$repo_root/plugins/quota-companion" "$market/plugins/"
@@ -35,6 +40,7 @@ cp "$repo_root/LICENSE" "$repo_root/THIRD_PARTY_NOTICES.md" "$market/plugins/quo
 sign_args=(--force --sign "$identity")
 if [[ "$identity" != '-' ]]; then sign_args+=(--options runtime --timestamp); fi
 codesign "${sign_args[@]}" "$market/plugins/quota-companion/bin/quota-companion-mcp"
+codesign "${sign_args[@]}" "$contents/MacOS/quota-companion-follow"
 codesign "${sign_args[@]}" "$app"
 codesign --verify --deep --strict "$app"
 print "$app"

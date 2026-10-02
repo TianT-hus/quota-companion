@@ -3,14 +3,17 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-  <key>CFBundleDisplayName</key><string>额度水滴 Dev</string>
+  <key>CFBundleDisplayName</key><string>朝夕</string>
   <key>CFBundleExecutable</key><string>额度水滴-Dev</string>
   <key>CFBundleIdentifier</key><string>dev.quota-companion.mac</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
-  <key>CFBundleName</key><string>额度水滴 Dev</string>
+  <key>CFBundleName</key><string>朝夕</string>
+  <key>CFBundleIconFile</key><string>Zhaoxi</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.12</string>
-  <key>CFBundleVersion</key><string>15</string>
+  <key>CFBundleShortVersionString</key><string>0.2.31</string>
+  <key>CFBundleVersion</key><string>47</string>
+  <key>NSMicrophoneUsageDescription</key><string>仅在你点击开始录音后，朝夕使用麦克风录制用于声音复刻的样本。确认上传前录音仅在本机处理，你也可以不授权并改用导入音频。</string>
+  <key>NSRemindersFullAccessUsageDescription</key><string>朝夕需要读取和修改你选择的提醒事项清单，以在待办中双向联动。现有本地待办不会自动上传。</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>

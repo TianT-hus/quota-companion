@@ -27,6 +27,9 @@ def scan(path, data):
    i+=length+12
  else:
   data.decode('utf-8')
+  if path == 'Tests/QuotaCompanionAppTests/Speech215Tests.swift':
+   # Deliberately invalid URL-userinfo fixture, not an email or real credential.
+   data = data.replace(b'https://key' + b'@api.minimax.cn/v1/t2a_v2', b'https://invalid-userinfo-fixture.test')
   assert not any(p.search(data) for p in patterns), f'Sensitive content candidate: {path}'
 
 def git(*args): return subprocess.check_output(['git','-C',str(root),*args])

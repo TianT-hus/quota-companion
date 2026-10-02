@@ -2,23 +2,68 @@ import AppKit
 import AVFoundation
 import Combine
 import QuotaCore
-import ServiceManagement
 import SwiftUI
 import UserNotifications
 
 @MainActor
 final class CompanionModel: ObservableObject {
+    let secretary: SecretaryModel
+    let reminders: RemindersModel
+    private var reminderLinks: AnyCancellable?
+    let speech: CompanionSpeech
+    let codexFollow: CodexFollowSettings
+    private var secretaryChanges: AnyCancellable?
+    var detailBaseSize: CGSize { CompactHoverMetrics.size }
+    @Published var managementActive = false
+    @Published var managementEditing = false
+    @Published var managementTodoEditing = false
+    @Published var managementSheet = false
+    var managementPausesAnimation: Bool { managementActive || managementEditing || managementTodoEditing || managementSheet }
     let characterLibrary: CharacterLibrary
     @Published var snapshot: QuotaSnapshot
     @Published var detailDirection: DetailDirection = .right
     @Published private(set) var interaction = PetInteraction()
     var isExpanded: Bool { interaction.mode != .petOnly }
     var isPinned: Bool { interaction.mode == .keyboardDetails }
-    @Published var companionSize: CompanionSize { didSet { defaults.set(companionSize.rawValue, forKey: "companionSize") } }
+    @Published var companionSize: CompanionSize {
+        didSet {
+            // New key preserves the pre-upgrade selection when returning to an older build.
+            if defaults.object(forKey: "companionSize.before-gallery.v1") == nil {
+                defaults.set(defaults.string(forKey: "companionSize") ?? "medium", forKey: "companionSize.before-gallery.v1")
+            }
+            defaults.set(companionSize.sliderPercent, forKey: "companionSize.slider.v2")
+        }
+    }
     @Published var palette: CompanionPalette { didSet { defaults.set(palette.rawValue, forKey: "companionPalette"); customAppearance.quotaHex = nil; customAppearance.quotaPresetID = nil } }
-    @Published var chestTextStyle: ChestTextStyle { didSet { defaults.set(chestTextStyle.rawValue, forKey: "chestTextStyle"); customAppearance.chest = nil } }
+    private var restoringTextStyle = false
+    @Published var chestTextStyle: ChestTextStyle {
+        didSet {
+            guard !restoringTextStyle else { return }
+            var appearance = customAppearance; appearance.chest = nil; appearance.chestPresetID = nil
+            guard saveAppearance(appearance) else {
+                restoringTextStyle = true; chestTextStyle = oldValue; restoringTextStyle = false
+                return
+            }
+            defaults.set(chestTextStyle.rawValue, forKey: "chestTextStyle")
+        }
+    }
     @Published var customAppearance: CustomAppearance {
-        didSet { if let data = try? JSONEncoder().encode(customAppearance) { defaults.set(data, forKey: "customAppearance.v1") } }
+        didSet {
+            guard !restoringAppearance else { return }
+            do { try appearanceStore.save(customAppearance, legacy: defaults.data(forKey: "customAppearance.v1")) }
+            catch {
+                restoringAppearance = true; customAppearance = oldValue; restoringAppearance = false
+                appearanceDialog = copy.text("外观未保存，原设置保持不变。请检查存储空间与文件权限。", "Appearance was not saved. Previous settings are unchanged. Check disk space and file permissions.")
+            }
+        }
+    }
+    let appearanceStore: AppearancePreferencesStore
+    private var restoringAppearance = false
+    @Published var appearanceDialog: String?
+    var colorEditorVisible = false
+    @discardableResult func saveAppearance(_ value: CustomAppearance) -> Bool {
+        appearanceDialog = nil; customAppearance = value
+        return appearanceDialog == nil
     }
     var quotaTint: QuotaCore.RGBColor? { customAppearance.quotaHex.flatMap(QuotaCore.RGBColor.init(hexString:)) }
     var progressTint: QuotaCore.RGBColor? { customAppearance.progressFollowsQuota ? quotaTint : QuotaCore.RGBColor(hexString: customAppearance.progressHex) }
@@ -26,18 +71,11 @@ final class CompanionModel: ObservableObject {
     @Published var isConnecting = false
     @Published var diagnosticMessage = ""
     @Published var installMessage = ""
-    @Published private(set) var launchAtLoginMessage = ""
     @Published var language: AppLanguage {
         didSet { defaults.set(language.rawValue, forKey: Keys.language) }
     }
     @Published var speechEnabled: Bool {
-        didSet { defaults.set(speechEnabled, forKey: Keys.speech) }
-    }
-    @Published var launchAtLogin: Bool {
-        didSet {
-            defaults.set(launchAtLogin, forKey: Keys.launchAtLogin)
-            updateLaunchAtLogin()
-        }
+        didSet { defaults.set(speechEnabled, forKey: Keys.speech); if !speechEnabled { speech.stop() } }
     }
     @Published var customCLIPath: String {
         didSet { defaults.set(customCLIPath, forKey: Keys.cliPath) }
@@ -49,11 +87,21 @@ final class CompanionModel: ObservableObject {
     @Published private(set) var background: CompanionBackground?
     @Published private(set) var isImportingBackground = false
     @Published private(set) var backgroundMessage = ""
+    @Published var backgroundDialog: String?
     @Published var backgroundDraft: BackgroundDraft?
     private var backgroundTask: Task<Void, Never>?
     private var backgroundGeneration = 0
 
     private let defaults: UserDefaults
+    var managementWindowSize: CGSize {
+        get {
+            CGSize(width: max(780, defaults.double(forKey: "management.width.v1")), height: max(620, defaults.double(forKey: "management.height.v1")))
+        }
+        set {
+            defaults.set(newValue.width, forKey: "management.width.v1")
+            defaults.set(newValue.height, forKey: "management.height.v1")
+        }
+    }
     private let store: SnapshotStore
     private let snapshotBox = SnapshotBox()
     private var client: CodexAppServerClient?
@@ -61,8 +109,8 @@ final class CompanionModel: ObservableObject {
     private var monitorTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
     private var thresholdTracker: ThresholdTracker
+    private var hasLiveObservation = false
     private var socketServer: QuotaSocketServer?
-    private let speechSynthesizer = AVSpeechSynthesizer()
     private var presentationHandler: ((PetPresentation) -> Void)?
     private let presentationBox = PresentationBox()
     func recordPresentation(_ data: Data) { presentationBox.set(data) }
@@ -72,14 +120,27 @@ final class CompanionModel: ObservableObject {
     init(defaults: UserDefaults = .standard, store: SnapshotStore = SnapshotStore()) {
         self.defaults = defaults
         self.store = store
+        appearanceStore = AppearancePreferencesStore(directory: store.directory)
+        speech = CompanionSpeech(defaults: defaults, directory: store.directory)
+        codexFollow = CodexFollowSettings(defaults: defaults)
+        secretary = SecretaryModel(directory: store.directory)
+        reminders = RemindersModel(directory: store.directory)
         characterLibrary = CharacterLibrary(directory: store.directory.appendingPathComponent("Characters", isDirectory: true), defaults: defaults)
-        customAppearance = defaults.data(forKey: "customAppearance.v1").flatMap { try? JSONDecoder().decode(CustomAppearance.self, from: $0) } ?? CustomAppearance()
+        var appearance = appearanceStore.load() ?? defaults.data(forKey: "customAppearance.v1").flatMap { try? JSONDecoder().decode(CustomAppearance.self, from: $0) } ?? CustomAppearance()
+        appearance.migratePaletteLibrary(legacy: CompanionPalette(rawValue: defaults.string(forKey: "companionPalette") ?? "") ?? .water)
+        appearance.migrateTextLibrary(legacy: ChestTextStyle(rawValue: defaults.string(forKey: "chestTextStyle") ?? "") ?? .whiteInk)
+        customAppearance = appearance
         companionSize = CompanionSize(rawValue: defaults.string(forKey: "companionSize") ?? "") ?? .medium
+        if let saved = defaults.object(forKey: "companionSize.percent.v1") as? Int, (50...125).contains(saved) {
+            companionSize = CompanionSize(percent: saved)
+        }
+        if let saved = defaults.object(forKey: "companionSize.slider.v2") as? Double, saved.isFinite, (0...100).contains(saved) {
+            companionSize = CompanionSize(sliderPercent: saved)
+        }
         palette = CompanionPalette(rawValue: defaults.string(forKey: "companionPalette") ?? "") ?? .water
         chestTextStyle = ChestTextStyle(rawValue: defaults.string(forKey: "chestTextStyle") ?? "") ?? .whiteInk
         language = AppLanguage(rawValue: defaults.string(forKey: Keys.language) ?? "system") ?? .system
         speechEnabled = defaults.bool(forKey: Keys.speech)
-        launchAtLogin = defaults.bool(forKey: Keys.launchAtLogin)
         customCLIPath = defaults.string(forKey: Keys.cliPath) ?? ""
         customMascotPath = defaults.string(forKey: Keys.mascotPath)
         customBackgroundName = defaults.string(forKey: "customBackgroundName")
@@ -88,6 +149,12 @@ final class CompanionModel: ObservableObject {
         thresholdTracker = store.loadThresholdTracker()
         snapshotBox.set(snapshot)
         loadSavedBackground()
+        secretaryChanges = secretary.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        reminderLinks = secretary.$data.sink { [weak self] data in self?.reminders.reconcileLinks(data) }
+        secretary.onReminder = { [weak self] block, date in
+            guard let self else { return }
+            self.speech.announce(block, date: date, copy: self.copy)
+        }
     }
 
     deinit { monitorTask?.cancel(); refreshTask?.cancel(); backgroundTask?.cancel() }
@@ -103,7 +170,7 @@ final class CompanionModel: ObservableObject {
         panel.allowedContentTypes = [.png, .jpeg, .webP, .heic]
         panel.allowsMultipleSelection = false
         panel.message = copy.text("选择本地背景图片，自动调整清晰度，不会上传。", "Choose a local background. Readability is adjusted automatically; nothing is uploaded.")
-        panel.begin { [weak self] response in
+        panel.beginOwned { [weak self] response in
             self?.holdInteraction(false)
             guard response == .OK, let url = panel.url else { return }
             Task { @MainActor in self?.importBackground(from: url, presentError: true, editBeforeApplying: true) }
@@ -151,23 +218,22 @@ final class CompanionModel: ObservableObject {
                     alert.messageText = self.copy.text("背景未更改", "Background unchanged")
                     alert.informativeText = self.backgroundMessage
                     alert.addButton(withTitle: self.copy.text("好", "OK"))
-                    if let window = NSApp.keyWindow {
-                        self.holdInteraction(true)
-                        alert.beginSheetModal(for: window) { [weak self] _ in self?.holdInteraction(false) }
-                    }
-                    else { alert.runModal() }
+                    self.holdInteraction(true)
+                    _ = alert.runOwnedModal(parent: OwnedDialogs.shared.managementWindow)
+                    self.holdInteraction(false)
                 }
             }
         }
     }
 
     func restoreDefaultBackground() {
+        var appearance = customAppearance; appearance.background = nil
+        guard saveAppearance(appearance) else { return }
         backgroundTask?.cancel()
         backgroundGeneration += 1
         isImportingBackground = false
         background = nil
         backgroundDraft = nil
-        customAppearance.background = nil
         customBackgroundName = nil
         defaults.removeObject(forKey: "customBackgroundName")
         backgroundMessage = copy.text("已恢复浅青玻璃背景。", "Restored the glass background.")
@@ -180,6 +246,7 @@ final class CompanionModel: ObservableObject {
 
     func applyBackgroundDraft(_ draft: BackgroundDraft, composition: BackgroundComposition) {
         guard !isImportingBackground else { return }
+        backgroundDialog = nil
         isImportingBackground = true
         backgroundGeneration += 1
         let generation = backgroundGeneration
@@ -197,12 +264,18 @@ final class CompanionModel: ObservableObject {
                     return (name, adjusted)
                 }.value
                 guard let self, !Task.isCancelled, generation == self.backgroundGeneration else { return }
+                var appearance = self.customAppearance; appearance.background = result.1
+                guard self.saveAppearance(appearance) else {
+                    self.isImportingBackground = false
+                    self.backgroundDialog = self.appearanceDialog
+                    self.appearanceDialog = nil
+                    return
+                }
                 if let prepared = draft.prepared, let name = result.0 {
                     self.background = CompanionBackground(image: draft.image, appearances: prepared.appearances)
                     self.customBackgroundName = name
                     self.defaults.set(name, forKey: "customBackgroundName")
                 }
-                self.customAppearance.background = result.1
                 self.isImportingBackground = false
                 self.backgroundDraft = nil
                 self.backgroundMessage = self.copy.text("构图已保存，图片仅保存在本机。", "Composition saved. Images stay on this Mac.")
@@ -210,6 +283,7 @@ final class CompanionModel: ObservableObject {
                 guard let self, !Task.isCancelled, generation == self.backgroundGeneration else { return }
                 self.isImportingBackground = false
                 self.backgroundMessage = self.backgroundError(error)
+                self.backgroundDialog = self.backgroundMessage
             }
         }
     }
@@ -239,6 +313,8 @@ final class CompanionModel: ObservableObject {
     }
 
     func start() {
+        secretary.start()
+        reminders.start()
         startSocketServer()
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in await self?.monitorLoop() }
@@ -272,13 +348,17 @@ final class CompanionModel: ObservableObject {
     }
 
     func toggleExpanded() { updateInteraction { $0.click() } }
-    func showExpanded() { updateInteraction { $0.showTemporary(now: ProcessInfo.processInfo.systemUptime) } }
+    func showExpanded() { secretary.page = .summary; updateInteraction { $0.showTemporary(now: ProcessInfo.processInfo.systemUptime) } }
+    func showDay() {
+        collapse(); secretary.dismissReminder()
+        NotificationCenter.default.post(name: .openCompanionDay, object: self)
+    }
     func showKeyboardDetails() { updateInteraction { $0.showPinned() } }
     func openSettings() {
         collapse()
         NotificationCenter.default.post(name: .openCompanionSettings, object: nil)
     }
-    func collapse() { updateInteraction { $0.close() } }
+    func collapse() { secretary.page = .summary; updateInteraction { $0.close() } }
     func togglePin() { updateInteraction { $0.togglePin(now: ProcessInfo.processInfo.systemUptime) } }
     func holdInteraction(_ active: Bool) {
         updateInteraction { $0.hold(active, now: ProcessInfo.processInfo.systemUptime) }
@@ -289,9 +369,10 @@ final class CompanionModel: ObservableObject {
         guard next != interaction else { return }
         let oldMode = interaction.mode
         interaction = next
+        if next.mode == .petOnly { secretary.page = .summary }
         if oldMode != next.mode { presentationHandler?(next.mode) }
     }
-    func setCompanionVisible(_ visible: Bool) { isCompanionVisible = visible }
+    func setCompanionVisible(_ visible: Bool) { isCompanionVisible = visible; if !visible { speech.stop() }; secretary.setVisible(visible) }
     func setPresentationHandler(_ handler: @escaping (PetPresentation) -> Void) {
         presentationHandler = handler
         handler(interaction.mode)
@@ -321,7 +402,7 @@ final class CompanionModel: ObservableObject {
         panel.allowedContentTypes = [.png, .webP]
         panel.allowsMultipleSelection = false
         panel.message = copy.text("选择透明 PNG、WebP 或 Codex 宠物精灵图", "Choose a transparent PNG, WebP, or Codex pet sprite sheet")
-        guard panel.runModal() == .OK, let source = panel.url else { return }
+        guard panel.runOwnedModal() == .OK, let source = panel.url else { return }
         let directory = store.directory.appendingPathComponent("Mascots", isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -340,7 +421,6 @@ final class CompanionModel: ObservableObject {
     func resetMascot() { customMascotPath = nil }
 
     func confirmAndInstallPlugin() {
-        guard !IsolatedRuntime.enabled else { installMessage = "Plugin installation is disabled in isolated QA."; return }
         guard let root = bundledMarketplaceRoot else {
             installMessage = copy.text("开发构建中未找到随包插件目录。先运行 scripts/package-app.sh。", "The bundled plugin directory is missing. Run scripts/package-app.sh first.")
             return
@@ -355,7 +435,7 @@ final class CompanionModel: ObservableObject {
         alert.informativeText = copy.text("将执行：\n\(command)\n\n目标：当前用户的 Codex 插件市场配置", "Command:\n\(command)\n\nTarget: the current user's Codex marketplace configuration")
         alert.addButton(withTitle: copy.text("确认安装", "Install"))
         alert.addButton(withTitle: copy.text("取消", "Cancel"))
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard alert.runOwnedModal() == .alertFirstButtonReturn else { return }
 
         let process = Process()
         let output = Pipe()
@@ -426,13 +506,17 @@ final class CompanionModel: ObservableObject {
             guard let patch = try RateLimitPayloadParser.parse(data) else { return }
             var accumulator = RateLimitAccumulator(snapshot: snapshot.source == .demo ? nil : snapshot)
             guard let updated = accumulator.merge(patch) else { return }
-            let previous = snapshot.source == .demo ? nil : snapshot
-            let events = thresholdTracker.events(previous: previous, current: updated)
+            let previous = snapshot.source == .demo || !hasLiveObservation ? nil : snapshot
+            hasLiveObservation = true
+            let events = thresholdTracker.events(previous: previous, current: updated, thresholds: speech.configuration.value.quota.thresholds)
             snapshot = updated
             snapshotBox.set(updated)
             try? store.save(snapshot: updated)
             try? store.save(thresholdTracker: thresholdTracker)
-            events.forEach(notify)
+            // Mark every crossed threshold, but deliver only once per quota window.
+            for kind in QuotaWindowKind.allCases {
+                if let event = events.last(where: { $0.window.kind == kind }) { notify(event) }
+            }
         } catch {
             diagnosticMessage = copy.text("额度响应无法解析", "Could not parse quota response")
         }
@@ -445,18 +529,19 @@ final class CompanionModel: ObservableObject {
     }
 
     private func notify(_ event: ThresholdEvent) {
-        guard !IsolatedRuntime.enabled else { return }
+        let rule = speech.configuration.value.quota
+        guard rule.enabled else { return }
         let content = UNMutableNotificationContent()
         content.title = copy.text("Codex 额度提醒", "Codex quota alert")
         content.body = copy.text(
             "\(event.window.accessibleLabel(locale: copy.locale))剩余 \(Int(event.window.remainingPercent.rounded()))%",
             "\(event.window.accessibleLabel(locale: copy.locale)) has \(Int(event.window.remainingPercent.rounded()))% remaining"
         )
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
-        if speechEnabled {
-            let utterance = AVSpeechUtterance(string: content.body)
-            utterance.voice = AVSpeechSynthesisVoice(language: copy.locale.identifier)
-            speechSynthesizer.speak(utterance)
+        if rule.delivery.notification {
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
+        if rule.delivery.spoken {
+            speech.speakTemplate(speech.template(.quota, copy: copy), values: speech.quotaValues(event.window), copy: copy, deadline: Date().addingTimeInterval(30))
         }
     }
 
@@ -484,23 +569,9 @@ final class CompanionModel: ObservableObject {
         socketServer = server
     }
 
-    private func updateLaunchAtLogin() {
-        guard !IsolatedRuntime.enabled else { return }
-        launchAtLoginMessage = ""
-        guard Bundle.main.bundleURL.pathExtension == "app" else { return }
-        do {
-            if launchAtLogin { try SMAppService.mainApp.register() }
-            else { try SMAppService.mainApp.unregister() }
-        } catch {
-            launchAtLoginMessage = copy.text("启动设置未能应用：", "Startup setting could not be applied: ") + error.localizedDescription
-            diagnosticMessage = error.localizedDescription
-        }
-    }
-
     private enum Keys {
         static let language = "language"
         static let speech = "speechEnabled"
-        static let launchAtLogin = "launchAtLogin"
         static let cliPath = "customCLIPath"
         static let mascotPath = "customMascotPath"
     }
@@ -508,6 +579,7 @@ final class CompanionModel: ObservableObject {
 
 extension Notification.Name {
     static let openCompanionSettings = Notification.Name("QuotaCompanion.openSettings")
+    static let openCompanionDay = Notification.Name("QuotaCompanion.openDay")
 }
 
 private final class PresentationBox: @unchecked Sendable {

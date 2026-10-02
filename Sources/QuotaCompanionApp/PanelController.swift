@@ -11,6 +11,13 @@ private final class CompanionPanel: NSPanel {
 
 private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
     var pointerChanged: (() -> Void)?
+    var contextMenuProvider: (() -> NSMenu?)?
+    override func menu(for event: NSEvent) -> NSMenu? { contextMenuProvider?() }
+    override func accessibilityPerformShowMenu() -> Bool {
+        guard let menu = contextMenuProvider?() else { return false }
+        menu.popUp(positioning: nil, at: CGPoint(x: bounds.midX, y: bounds.midY), in: self)
+        return true
+    }
     override var isOpaque: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func updateTrackingAreas() {
@@ -31,8 +38,11 @@ final class PanelController: NSObject {
     private let petView: FirstMouseHostingView<PetRootView>
     private let detailView: FirstMouseHostingView<CompanionRootView>
     private let positionDefaults: UserDefaults
+    private let monitorsSystem: Bool
     private var subscriptions = Set<AnyCancellable>()
     private var mouseMonitor: Any?
+    private var outsideMonitor: Any?
+    private var reminderPanel: NSPanel?
     private var visibilityTimer: Timer?
     private var hoverTimer: Timer?
     private var requestedVisible = false
@@ -40,6 +50,9 @@ final class PanelController: NSObject {
     private var downPoint: CGPoint?
     private var downOrigin: CGPoint = .zero
     private var generation = 0
+    private var hideGeneration = 0
+    private var pendingDetailHide = false
+    private lazy var contextMenu = CompanionContextMenu(model: model)
     private(set) var layoutMilliseconds = 0.0
     private(set) var layout: PetPanelLayout?
     var nativeWindow: NSWindow { pet }
@@ -47,7 +60,7 @@ final class PanelController: NSObject {
     private var petSize: CGSize { model.companionSize.petSize }
 
     init(model: CompanionModel, positionDefaults: UserDefaults = .standard, monitorsSystem: Bool = true) {
-        self.model = model; self.positionDefaults = positionDefaults
+        self.model = model; self.positionDefaults = positionDefaults; self.monitorsSystem = monitorsSystem
         pet = CompanionPanel(contentRect: CGRect(origin: .zero, size: PetPanelLayout.petSize),
                       styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         detail = CompanionPanel(contentRect: CGRect(x: 0, y: 0, width: 200, height: 80),
@@ -60,6 +73,24 @@ final class PanelController: NSObject {
         pet.title = "Quota Pixel Cat"; detail.title = "Quota Details"
         petView.pointerChanged = { [weak self] in self?.samplePointer() }
         detailView.pointerChanged = { [weak self] in self?.samplePointer() }
+        contextMenu.willOpen = { [weak self] in
+            // Stop CA immediately, before NSMenu starts its modal run loop.
+            // SwiftUI's eligibility update may otherwise arrive a frame later.
+            @MainActor func stopMotion(_ view: NSView) {
+                (view as? CharacterAnimationCanvas)?.stop()
+                view.subviews.forEach(stopMotion)
+            }
+            if let self { stopMotion(self.petView) }
+        }
+        contextMenu.didClose = { [weak self] in self?.samplePointer() }
+        petView.contextMenuProvider = { [weak self] in
+            guard let self, self.model.secretary.editor == nil else { return nil }
+            return self.contextMenu.prepare()
+        }
+        detailView.contextMenuProvider = { [weak self] in
+            guard let self, self.model.secretary.page == .summary, self.model.secretary.editor == nil else { return nil }
+            return self.contextMenu.prepare()
+        }
         model.setPresentationHandler { [weak self] _ in self?.present() }
         model.$companionSize.removeDuplicates().dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -70,7 +101,10 @@ final class PanelController: NSObject {
             }
         }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification, object: detail).sink { [weak self] _ in
-            DispatchQueue.main.async { self?.model.updateInteraction { $0.releaseKeyboard(now: ProcessInfo.processInfo.systemUptime) } }
+            DispatchQueue.main.async {
+                guard let self, self.model.secretary.page == .summary else { return }
+                self.model.updateInteraction { $0.releaseKeyboard(now: ProcessInfo.processInfo.systemUptime) }
+            }
         }.store(in: &subscriptions)
         NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification, object: detail).sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -81,11 +115,19 @@ final class PanelController: NSObject {
         model.$snapshot.map { $0.windows.count }.removeDuplicates().dropFirst().sink { [weak self] _ in
             DispatchQueue.main.async { self?.positionDetails() }
         }.store(in: &subscriptions)
+        model.secretary.$page.removeDuplicates().dropFirst().sink { [weak self] _ in
+            DispatchQueue.main.async { self?.present() }
+        }.store(in: &subscriptions)
+        model.secretary.$reminder.sink { [weak self] block in
+            DispatchQueue.main.async { self?.showReminder(block) }
+        }.store(in: &subscriptions)
         for name in [NSMenu.didBeginTrackingNotification, NSMenu.didEndTrackingNotification] {
-            NotificationCenter.default.publisher(for: name).sink { [weak self] _ in
+            NotificationCenter.default.publisher(for: name).sink { [weak self] note in
+                // Our own delegate already owns its synchronous tracking hold.
+                guard let self, (note.object as? NSMenu) !== self.contextMenu.menu else { return }
                 DispatchQueue.main.async {
-                    self?.model.holdInteraction(name == NSMenu.didBeginTrackingNotification)
-                    self?.samplePointer()
+                    self.model.holdInteraction(name == NSMenu.didBeginTrackingNotification)
+                    self.samplePointer()
                 }
             }.store(in: &subscriptions)
         }
@@ -95,11 +137,17 @@ final class PanelController: NSObject {
                 self.restorePosition(); self.positionDetails()
             }
         }.store(in: &subscriptions)
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .keyDown]) { [weak self] event in
-            guard let self else { return event }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown, .leftMouseDragged, .leftMouseUp, .keyDown]) { [weak self] event in
+            guard let self, self.monitorsSystem else { return event }
             return self.pointerEvent(event)
         }
         if monitorsSystem {
+            outsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self, self.model.secretary.page != .summary, self.model.secretary.editor == nil else { return }
+                    self.model.collapse()
+                }
+            }
             visibilityTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.refreshVisibility() }
             }
@@ -127,6 +175,7 @@ final class PanelController: NSObject {
         refreshVisibility(); present()
     }
     func hide() {
+        hideGeneration += 1; pendingDetailHide = false
         requestedVisible = false; model.setCompanionVisible(false)
         hoverTimer?.invalidate(); hoverTimer = nil
         pet.orderOut(nil); detail.orderOut(nil)
@@ -134,6 +183,8 @@ final class PanelController: NSObject {
     func close() {
         hide(); visibilityTimer?.invalidate()
         if let mouseMonitor { NSEvent.removeMonitor(mouseMonitor) }
+        if let outsideMonitor { NSEvent.removeMonitor(outsideMonitor) }
+        outsideMonitor = nil; reminderPanel?.orderOut(nil); model.secretary.stop()
         mouseMonitor = nil; subscriptions.removeAll()
     }
 
@@ -141,10 +192,14 @@ final class PanelController: NSObject {
         generation += 1
         let token = generation
         positionDetails()
-        guard requestedVisible && model.isCompanionVisible else { detail.orderOut(nil); return }
+        guard requestedVisible && model.isCompanionVisible else {
+            hideGeneration += 1; pendingDetailHide = false
+            detail.orderOut(nil); return
+        }
         let reduce = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         detailView.layer?.removeAllAnimations()
         if model.isExpanded {
+            hideGeneration += 1; pendingDetailHide = false
             let alreadyVisible = detail.isVisible
             detail.alphaValue = alreadyVisible || reduce ? 1 : 0
             detail.orderFrontRegardless()
@@ -154,15 +209,25 @@ final class PanelController: NSObject {
                 NSAnimationContext.runAnimationGroup { context in context.duration = 0.16; detail.animator().alphaValue = 1 }
             }
         } else if detail.isVisible && !reduce {
+            // Geometry/page notifications must not restart an in-progress hide.
+            if !pendingDetailHide {
+            pendingDetailHide = true; hideGeneration += 1
+            let hideToken = hideGeneration
             NSAnimationContext.runAnimationGroup { context in context.duration = 0.16; detail.animator().alphaValue = 0 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
-                guard let self, token == self.generation, !self.model.isExpanded else { return }
+                guard let self, hideToken == self.hideGeneration, !self.model.isExpanded else { return }
+                self.pendingDetailHide = false
                 self.detail.orderOut(nil)
                 self.recordDiagnostics()
             }
-        } else { detail.orderOut(nil) }
+            }
+        } else {
+            hideGeneration += 1; pendingDetailHide = false
+            detail.orderOut(nil)
+        }
+        let expectedPetSize = petSize
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            guard let self, token == self.generation, let layout = self.layout else { return }
+            guard let self, token == self.generation, self.petSize == expectedPetSize, let layout = self.layout else { return }
             if self.pet.frame.size != self.petSize || self.petView.bounds.size != self.petSize ||
                 self.detail.frame != layout.detail || self.detailView.bounds.size != layout.detail.size {
                 self.setFrame(CGRect(origin: self.pet.frame.origin, size: self.petSize), panel: self.pet)
@@ -183,7 +248,7 @@ final class PanelController: NSObject {
     private func positionDetails() {
         let started = ProcessInfo.processInfo.systemUptime
         guard let screen = screenForPet() else { return }
-        let next = PetPanelLayout(pet: pet.frame, windowCount: model.snapshot.windows.count, screen: screen.visibleFrame, scale: model.companionSize.scale)
+        let next = PetPanelLayout(pet: pet.frame, windowCount: model.snapshot.windows.count, screen: screen.visibleFrame, scale: max(2, model.companionSize.scale), detailSize: model.detailBaseSize)
         detailView.layer?.cornerRadius = 0
         layout = next
         if model.detailDirection != next.direction { model.detailDirection = next.direction }
@@ -201,7 +266,7 @@ final class PanelController: NSObject {
     }
 
     private func samplePointer() {
-        guard requestedVisible && model.isCompanionVisible else { return }
+        guard monitorsSystem, requestedVisible && model.isCompanionVisible else { return }
         let point = NSEvent.mouseLocation
         let onPet = pet.frame.contains(point)
         let inRegion = onPet || (model.isExpanded && (layout?.contains(point) ?? false))
@@ -210,6 +275,7 @@ final class PanelController: NSObject {
         ensureHoverTimer()
     }
     private func ensureHoverTimer() {
+        guard monitorsSystem else { return }
         let state = model.interaction
         let needed = requestedVisible && model.isCompanionVisible && !state.dragging &&
             (state.openAt != nil || state.closeAt != nil || state.mode == .hoverDetails)
@@ -222,6 +288,23 @@ final class PanelController: NSObject {
     }
 
     private func pointerEvent(_ event: NSEvent) -> NSEvent? {
+        let onPet = event.windowNumber == pet.windowNumber
+        let onSummary = event.windowNumber == detail.windowNumber && model.secretary.page == .summary
+        if model.secretary.editor == nil, onPet || onSummary {
+            if event.type == .rightMouseDown || (event.type == .leftMouseDown && event.modifierFlags.contains(.control)) {
+                downPoint = nil
+                NSMenu.popUpContextMenu(contextMenu.prepare(), with: event, for: onPet ? petView : detailView)
+                return nil
+            }
+            if event.type == .keyDown && event.keyCode == 109 && event.modifierFlags.contains(.shift) {
+                let view: NSView = onPet ? petView : detailView
+                contextMenu.prepare().popUp(positioning: nil, at: CGPoint(x: view.bounds.midX,y: view.bounds.midY), in: view)
+                return nil
+            }
+        }
+        if event.type == .leftMouseDown, model.secretary.page != .summary, model.secretary.editor == nil,
+           event.windowNumber != pet.windowNumber, event.windowNumber != detail.windowNumber { model.collapse() }
+        if model.secretary.editor != nil { return event }
         if event.type == .keyDown, event.windowNumber == pet.windowNumber || event.windowNumber == detail.windowNumber {
             if event.keyCode == 53 { model.collapse(); return nil }
             if event.keyCode == 36 || event.keyCode == 49, event.windowNumber == pet.windowNumber { model.showKeyboardDetails(); return nil }
@@ -253,6 +336,25 @@ final class PanelController: NSObject {
             return nil
         default: return event
         }
+    }
+
+    private func showReminder(_ block: ScheduleBlock?) {
+        reminderPanel?.orderOut(nil); reminderPanel = nil
+        guard let block, model.isCompanionVisible, model.secretary.editor == nil, let screen = screenForPet() else { return }
+        let frame = PanelGeometry.constrained(CGRect(x: pet.frame.maxX + 8, y: pet.frame.maxY + 8, width: 260, height: 76), to: screen.visibleFrame)
+        let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false; panel.level = .floating
+        let view = NSHostingView(rootView: HStack(alignment: .top, spacing: 8) {
+            Button { [weak self] in self?.model.showDay() } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(self.model.copy.text("现在该做", "Time for")).font(.system(size: 11))
+                    Text(block.title).font(.system(size: 13, weight: .semibold)).lineLimit(2)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.plain)
+            Button { [weak self] in self?.model.secretary.dismissReminder() } label: { Image(systemName: "xmark") }.buttonStyle(.plain)
+        }.padding(12).frame(width: 260, height: 76).foregroundStyle(Color(red: 0.06, green: 0.14, blue: 0.24))
+            .background(Color(red: 0.9, green: 0.97, blue: 1), in: RoundedRectangle(cornerRadius: 14)))
+        panel.contentView = view; panel.orderFrontRegardless(); reminderPanel = panel
     }
 
     private func screenForPet() -> NSScreen? {
