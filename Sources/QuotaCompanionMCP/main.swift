@@ -20,7 +20,7 @@ enum QuotaCompanionMCP {
             return success(id: id, result: [
                 "protocolVersion": "2025-06-18",
                 "capabilities": ["tools": ["listChanged": false], "resources": ["subscribe": false, "listChanged": false]],
-            "serverInfo": ["name": "quota-companion", "version": "0.2.6"],
+            "serverInfo": ["name": "quota-companion", "version": "0.2.31"],
             ])
         case "notifications/initialized":
             return nil

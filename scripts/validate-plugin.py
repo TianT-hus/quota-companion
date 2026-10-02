@@ -8,6 +8,7 @@ j = json.loads((p / '.codex-plugin/plugin.json').read_text())
 version = plistlib.loads((root / 'Packaging/Info.plist').read_bytes())['CFBundleShortVersionString']
 assert j['name'] == p.name == 'quota-companion'
 assert j['version'] == version and j['license'] == 'MIT'
+assert f'"version": "{version}"' in (root/'Sources/QuotaCompanionMCP/main.swift').read_text()
 assert j['skills'] == './skills/' and j['mcpServers'] == './.mcp.json'
 for key in ['composerIcon','logo']:
     path = p / j['interface'][key]
