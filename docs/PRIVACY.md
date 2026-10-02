@@ -1,4 +1,4 @@
-# 隐私说明 / Privacy
+# 朝夕 · 隐私说明 / Zhaoxi Privacy
 
 本说明对应朝夕 0.2.31（build 47）。
 
@@ -19,8 +19,8 @@
 - **系统声音与翻译**：调用 macOS 的声音和翻译功能；准备语言资源时，macOS 可能按需下载资源。未准备翻译资源时不应把跨语言播报当作可用。
 - **跟随 Codex 与登录启动**：用户主动启用后通过系统服务管理启动；跟随辅助程序观察本机应用启动/退出，不读取日程或额度内容。
 
-发布的源码、插件和安装包不包含维护者的个人数据、录音、照片或密钥。不要在公开 issue 或日志中粘贴这些内容，安全问题使用 [私密报告入口](https://github.com/TianT-hus/quota-companion/security/advisories/new)。
+公开文档与插件图标使用维护者指定的蓝色礼裙桌宠展示图，图中的额度为合成示例，图像文件不含 EXIF 或文本元数据。原始照片、完整个人角色包、真实日程、录音和密钥不随这次文档更新公开。0.2.31 安装包的资源范围以该版本附件为准。不要在公开 issue 或日志中粘贴个人数据，安全问题使用 [私密报告入口](https://github.com/TianT-hus/quota-companion/security/advisories/new)。
 
 ## English summary
 
-Zhaoxi stores sanitized quota snapshots, schedules, todos, companion assets and settings locally. Optional cloud speech sends announcement text to the selected provider; confirmed voice cloning uploads processed audio and may incur charges. Provider keys are stored in macOS Keychain, with a short-lived in-memory cache. Authorized Reminders lists can synchronize through their system accounts. Local backgrounds and character assets are not uploaded by the app. Public release packages contain code and built-in assets, not the maintainer's personal data.
+Zhaoxi stores sanitized quota snapshots, schedules, todos, companion assets and settings locally. Optional cloud speech sends announcement text to the selected provider; confirmed voice cloning uploads processed audio and may incur charges. Provider keys are stored in macOS Keychain, with a short-lived in-memory cache. Authorized Reminders lists can synchronize through their system accounts. Local backgrounds and character assets are not uploaded by the app. Public documentation uses a maintainer-designated blue-gown companion preview with synthetic quota data; original photos, full personal character packages, recordings and credentials are not included.

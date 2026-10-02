@@ -1,7 +1,7 @@
 {
   "name": "quota-companion",
   "version": "0.2.31",
-  "description": "Read-only Codex quota access and local controls for the Zhaoxi macOS companion.",
+  "description": "Zhaoxi (朝夕): read-only Codex quota access and local controls, presented with a blue-gown desktop companion.",
   "author": {
     "name": "Quota Companion Contributors"
   },
@@ -17,7 +17,7 @@
   "interface": {
     "displayName": "朝夕 / Zhaoxi",
     "shortDescription": "查看 Codex 额度并控制朝夕桌宠",
-    "longDescription": "读取主 Codex 额度，显示液位卡片，并打开朝夕桌宠与设置。应用支持本地日程、待办，以及用户主动启用的提醒事项同步和云语音。",
+    "longDescription": "朝夕是管理 Codex 额度、每日安排与待办的 macOS 桌面伙伴。项目以蓝色礼裙桌宠展示额度填充与动作效果；实际形象以用户选择的本地角色为准。云语音和提醒事项同步需要用户主动启用。",
     "developerName": "Quota Companion Contributors",
     "category": "Productivity",
     "capabilities": [

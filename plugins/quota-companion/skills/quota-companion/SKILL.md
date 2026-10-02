@@ -1,11 +1,13 @@
 ---
 name: quota-companion
-description: Read the user's main Codex quota status, show the inline liquid-level card, or control the local Quota Companion macOS pet. Use for questions about remaining five-hour, weekly, or other Codex quota windows, and for requests to show, collapse, or configure the pet.
+description: Read the user's main Codex quota status, show the inline liquid-level card, or control the local Zhaoxi (朝夕) macOS companion. Use for questions about remaining five-hour, weekly, or other Codex quota windows, and for requests to show, collapse, or configure the companion.
 ---
 
-# Quota Companion
+# 朝夕 / Zhaoxi
 
 Use the bundled `quota-companion` MCP tools for quota status and desktop-pet controls.
+
+The project illustration is the blue-gown companion. It depicts synthetic quota data. The user's actual desktop appearance follows their selected local character; the illustration does not imply that the full character package is bundled in the release.
 
 ## Status requests
 
@@ -19,8 +21,8 @@ The tool is read-only. Do not offer to redeem reset credits, buy quota, change a
 
 ## Companion controls
 
-- Use `show_companion` to launch the macOS companion and temporarily show its detail panel beside the cat.
-- Use `collapse_companion` to hide details while keeping the 72-by-80-point pixel cat visible.
-- Use `open_companion_settings` for language, speech, launch-at-login, custom CLI path, or the local detail-card background. The built-in cat is the default; users can import local v1/v2 character packages.
+- Use `show_companion` to launch Zhaoxi and temporarily show the detail panel beside the user's selected companion.
+- Use `collapse_companion` to hide details while keeping the selected companion visible.
+- Use `open_companion_settings` for language, speech, startup behavior, companion appearance, custom CLI path, or the local detail-card background. Users can create a local character from an image or import a v1/v2/v3/v4 package. Cloud speech and Reminders require the user to configure and authorize them in the app; these MCP tools do not expose credentials, voice cloning, or schedule editing.
 
 If the app is not installed, return the tool's installation guidance without claiming the control succeeded.

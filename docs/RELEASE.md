@@ -1,6 +1,6 @@
-# 发布流程
+# 朝夕 · 发布流程
 
-1. 核对 `Packaging/Info.plist`、插件 manifest、README 和版本说明。只提交公开代码、文档及已授权的内置资源。
+1. 核对 `Packaging/Info.plist`、插件 manifest、README 和版本说明。对外名称统一为“朝夕 / Zhaoxi”，桌宠展示采用蓝色礼裙。逐项核对展示图和安装包实际内置资源的区别；只提交公开代码、文档及明确指定公开的展示素材。
 2. 运行 `python3 scripts/audit-public.py --history` 和 `./scripts/validate.sh`。可选私人素材检查不是公共验收覆盖；真实系统权限和硬件测试应单独记录。
 3. 在干净 Git 提交上运行 `python3 scripts/release-local.py`。脚本从该提交归档到独立目录，重新执行测试、构建两个 CPU 架构，校验签名和二进制路径，再生成应用 ZIP、插件 ZIP、源码 ZIP、构建信息和校验文件。
 4. 默认使用 ad-hoc 签名，以测试版发布。只有提供有效 `DEVELOPER_ID_APPLICATION`、完成公证及 stapler/Gatekeeper 检查后，才能另行声明 Developer ID 或公证状态；当前脚本不会自动公证。
